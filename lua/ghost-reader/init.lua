@@ -2,6 +2,7 @@ local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local reader = require("ghost-reader.reader")
+local history = require("ghost-reader.history")
 
 M.config = nil
 
@@ -14,7 +15,10 @@ end
 
 function M.open(path)
   if not M.config then M.setup() end
-  return reader.open(path, M.config)
+  local ok = reader.open(path, M.config)
+  if ok then
+    history.record(path, M.config)
+  end
 end
 
 function M.close()
@@ -31,6 +35,27 @@ function M.toc()
   end
   vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
     if idx then reader.go_to_chapter(idx) end
+  end)
+end
+
+function M.select_book()
+  if not M.config then M.setup() end
+  local entries = history.load(M.config)
+  local items = {}
+  for _, e in ipairs(entries) do
+    table.insert(items, e.name .. "  (" .. e.path .. ")")
+  end
+  table.insert(items, "+ 输入新路径...")
+
+  vim.ui.select(items, { prompt = "Select book:" }, function(_, idx)
+    if not idx then return end
+    if idx <= #entries then
+      M.open(entries[idx].path)
+    else
+      vim.ui.input({ prompt = "Book path: ", completion = "file" }, function(input)
+        if input and input ~= "" then M.open(vim.fn.expand(input)) end
+      end)
+    end
   end)
 end
 

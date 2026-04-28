@@ -4,13 +4,12 @@ end
 vim.g.loaded_ghost_reader = true
 
 vim.api.nvim_create_user_command("GhostReader", function(opts)
+  local gr = require("ghost-reader")
   local path = opts.args
-  if path == "" then
-    vim.ui.input({ prompt = "Book path: " }, function(input)
-      if input then require("ghost-reader").open(input) end
-    end)
+  if path ~= "" then
+    gr.open(vim.fn.expand(path))
   else
-    require("ghost-reader").open(vim.fn.expand(path))
+    gr.select_book()
   end
 end, { nargs = "?", complete = "file" })
 

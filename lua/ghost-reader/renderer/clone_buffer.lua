@@ -31,10 +31,10 @@ local function get_string_content(line)
   return nil
 end
 
-local function shorten_for_context(text, max_len)
-  max_len = max_len or 50
-  if #text <= max_len then return text end
-  return text:sub(1, max_len - 2) .. ".."
+local function shorten_for_context(text, max_chars)
+  max_chars = max_chars or 80
+  if vim.fn.strchars(text) <= max_chars then return text end
+  return vim.fn.strcharpart(text, 0, max_chars - 1) .. "…"
 end
 
 function M.render(book_lines, opts)

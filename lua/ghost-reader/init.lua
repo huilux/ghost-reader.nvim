@@ -21,4 +21,17 @@ function M.close()
   reader.close()
 end
 
+function M.toc()
+  local reader = require("ghost-reader.reader")
+  if not reader.state then return end
+  local book = reader.state.book
+  local items = {}
+  for _, entry in ipairs(book.toc) do
+    table.insert(items, entry.title)
+  end
+  vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
+    if idx then reader.go_to_chapter(idx) end
+  end)
+end
+
 return M

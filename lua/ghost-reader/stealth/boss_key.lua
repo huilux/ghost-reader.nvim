@@ -32,7 +32,7 @@ function M.activate(preset_lines, preset_name, preset_filetype, target_buf)
   local lines = preset_lines or { "-- nothing to show" }
   vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, lines)
   if preset_name then
-    vim.api.nvim_buf_set_name(target_buf, preset_name)
+    pcall(vim.api.nvim_buf_set_name, target_buf, preset_name)
   end
   if preset_filetype then
     vim.bo[target_buf].filetype = preset_filetype
@@ -50,7 +50,7 @@ function M.deactivate(target_buf)
     local lines = reader._snapshot.buf_lines
     vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, lines)
     if snapshot and snapshot.name then
-      vim.api.nvim_buf_set_name(target_buf, snapshot.name)
+      pcall(vim.api.nvim_buf_set_name, target_buf, snapshot.name)
     end
     if snapshot and snapshot.filetype then
       vim.bo[target_buf].filetype = snapshot.filetype

@@ -22,7 +22,7 @@ function M.apply(fake_path, fake_filetype)
   vim.api.nvim_set_option_value("statusline", " %t %m %y %=%l,%c ", { win = win })
 
   if fake_path then
-    vim.api.nvim_buf_set_name(0, fake_path)
+    pcall(vim.api.nvim_buf_set_name, 0, fake_path)
   end
   if fake_filetype then
     vim.bo.filetype = fake_filetype

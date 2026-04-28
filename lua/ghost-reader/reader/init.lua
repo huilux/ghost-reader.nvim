@@ -18,7 +18,13 @@ function M.open(path, config)
     return false
   end
 
+  -- Capture current buffer BEFORE switching (for clone_buffer mode & boss key)
+  stealth.setup(config)
+  local boss_key = require("ghost-reader.stealth.boss_key")
+  boss_key.capture_from_current()
+
   local buf = vim.api.nvim_create_buf(false, true)
+
   local state = {
     book = book,
     buf = buf,
@@ -33,10 +39,6 @@ function M.open(path, config)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].modifiable = true
-
-  stealth.setup(config)
-  local boss_key = require("ghost-reader.stealth.boss_key")
-  boss_key.capture_from_current()
 
   statusline.save()
   M._render(state)
@@ -72,8 +74,8 @@ function M._render(state)
   }
 
   if mode == "clone_buffer" then
-    local boss_key = require("ghost-reader.stealth.boss_key")
-    local snap = boss_key.get_snapshot()
+    local bk = require("ghost-reader.stealth.boss_key")
+    local snap = bk.get_snapshot()
     if snap and #snap.lines > 0 then
       render_opts.source_lines = snap.lines
       render_opts.source_ft = snap.filetype

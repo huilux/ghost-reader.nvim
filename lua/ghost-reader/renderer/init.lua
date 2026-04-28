@@ -3,6 +3,7 @@ local M = {}
 local renderers = {
   minimal_diff = require("ghost-reader.renderer.minimal_diff"),
   code_camouflage = require("ghost-reader.renderer.code_camouflage"),
+  dual_mode = require("ghost-reader.renderer.dual_mode"),
 }
 
 function M.render(lines, mode, opts)

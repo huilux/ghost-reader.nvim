@@ -5,6 +5,8 @@ local utils = require("ghost-reader.utils")
 local stealth = require("ghost-reader.stealth")
 local statusline = require("ghost-reader.stealth.statusline")
 local renderer = require("ghost-reader.renderer")
+local bookmark = require("ghost-reader.reader.bookmark")
+local progress = require("ghost-reader.reader.progress")
 
 M.state = nil
 M.page_size = 40
@@ -39,6 +41,15 @@ function M.open(path, config)
   statusline.save()
   M._render(state)
   M._set_keymaps(buf, config.keymaps)
+  M._bookmark = nil
+  vim.api.nvim_create_autocmd({ "BufUnload", "CursorHold" }, {
+    buffer = buf,
+    callback = function()
+      if M.state then
+        progress.save(M.state.book, M.state, M.state.config)
+      end
+    end,
+  })
   return true
 end
 
@@ -79,6 +90,37 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.switch_mode, function() M.switch_mode() end)
   map(keymaps.boss_key, function()
     stealth.activate_boss_key(M.state and M.state.buf)
+  end)
+
+  map(keymaps.bookmark_add, function()
+    if not M.state then return end
+    local row = vim.api.nvim_win_get_cursor(0)[1]
+    M._bookmark = M._bookmark or bookmark.new("current")
+    M._bookmark:add(row)
+    vim.notify("[ghost-reader] bookmark added at line " .. row, vim.log.levels.INFO)
+  end)
+
+  map(keymaps.bookmark_list, function()
+    if not M.state or not M._bookmark then return end
+    local items = M._bookmark:list()
+    if #items == 0 then
+      vim.notify("[ghost-reader] no bookmarks", vim.log.levels.WARN)
+      return
+    end
+    vim.ui.select(items, {
+      prompt = "Bookmarks:",
+      format_item = function(item)
+        return "L" .. item.line .. (item.note ~= "" and (" - " .. item.note) or "")
+      end,
+    }, function(choice)
+      if choice then
+        vim.api.nvim_win_set_cursor(0, { choice.line, 0 })
+      end
+    end)
+  end)
+
+  map(keymaps.progress, function()
+    if M.state then progress.show(M.state.book, M.state) end
   end)
 end
 

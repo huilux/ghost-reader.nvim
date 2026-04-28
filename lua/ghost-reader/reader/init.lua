@@ -88,7 +88,7 @@ function M._render(state)
   vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, rendered.lines)
   vim.bo[state.buf].filetype = rendered.filetype
   if rendered.fake_path then
-    vim.api.nvim_buf_set_name(state.buf, rendered.fake_path)
+    pcall(vim.api.nvim_buf_set_name, state.buf, rendered.fake_path)
   end
   vim.api.nvim_buf_call(state.buf, function()
     vim.cmd("normal! gg")

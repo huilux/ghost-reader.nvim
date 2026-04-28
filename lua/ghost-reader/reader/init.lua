@@ -2,6 +2,7 @@ local M = {}
 local navigate = require("ghost-reader.reader.navigate")
 local bookshelf = require("ghost-reader.bookshelf")
 local utils = require("ghost-reader.utils")
+local stealth = require("ghost-reader.stealth")
 
 M.state = nil
 M.page_size = 40
@@ -28,6 +29,10 @@ function M.open(path, config)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].modifiable = true
+
+  stealth.setup(config)
+  local boss_key = require("ghost-reader.stealth.boss_key")
+  boss_key.capture_from_current()
 
   M._render(state)
   M._set_keymaps(buf, config.keymaps)
@@ -57,6 +62,9 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.prev_chapter, function() M.prev_chapter() end)
   map(keymaps.restore, function() M.restore() end)
   map(keymaps.switch_mode, function() M.switch_mode() end)
+  map(keymaps.boss_key, function()
+    stealth.activate_boss_key(M.state and M.state.buf)
+  end)
 end
 
 function M.next_page()
@@ -94,7 +102,8 @@ function M.switch_mode()
 end
 
 function M.restore()
-  -- Will be implemented in Task 7
+  stealth.deactivate_boss_key(M.state and M.state.buf)
+  if M.state then M._render(M.state) end
 end
 
 function M.close()

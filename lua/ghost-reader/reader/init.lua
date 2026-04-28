@@ -18,7 +18,6 @@ function M.open(path, config)
     return false
   end
 
-  -- Capture current buffer BEFORE switching (for clone_buffer mode & boss key)
   stealth.setup(config)
   local boss_key = require("ghost-reader.stealth.boss_key")
   boss_key.capture_from_current()
@@ -32,6 +31,13 @@ function M.open(path, config)
     line_offset = 0,
     config = config,
   }
+
+  local saved = progress.load(book, config)
+  if saved then
+    state.chapter_index = math.min(saved.chapter_index or 1, #book.chapters)
+    state.line_offset = saved.line_offset or 0
+  end
+
   M.state = state
   M.page_size = math.floor(vim.o.lines * 0.85)
 
@@ -47,7 +53,7 @@ function M.open(path, config)
 
   local book_name = vim.fn.fnamemodify(path, ":t:r")
   vim.notify(
-    string.format("[ghost-reader] %s · %d chapters\nJ/K=翻页 ]c/[c=章节 <leader>gm=切换模式 <Esc><Esc>=老板键",
+    string.format("[ghost-reader] %s · %d chapters\nJ/K=翻页 ]c/[c=章节 <Esc><Esc>=老板键",
       book_name, #book.chapters),
     vim.log.levels.INFO
   )
@@ -68,22 +74,7 @@ function M._render(state)
   local raw_lines = navigate.get_page_lines(chapter.lines, state.line_offset, M.page_size)
   if #raw_lines == 0 then raw_lines = { "(empty chapter)" } end
 
-  local mode = state.config.default_mode
-  local render_opts = {
-    lang = state.config.camouflage_lang,
-  }
-
-  if mode == "clone_buffer" then
-    local bk = require("ghost-reader.stealth.boss_key")
-    local snap = bk.get_snapshot()
-    if snap and #snap.lines > 0 then
-      render_opts.source_lines = snap.lines
-      render_opts.source_ft = snap.filetype
-      render_opts.source_path = snap.name
-    end
-  end
-
-  local rendered = renderer.render(raw_lines, mode, render_opts)
+  local rendered = renderer.render(raw_lines)
 
   vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, rendered.lines)
   vim.bo[state.buf].filetype = rendered.filetype
@@ -108,7 +99,6 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.next_chapter, function() M.next_chapter() end)
   map(keymaps.prev_chapter, function() M.prev_chapter() end)
   map(keymaps.restore, function() M.restore() end)
-  map(keymaps.switch_mode, function() M.switch_mode() end)
   map(keymaps.boss_key, function()
     stealth.activate_boss_key(M.state and M.state.buf)
   end)
@@ -122,7 +112,7 @@ function M._set_keymaps(buf, keymaps)
   end)
 
   map(keymaps.bookmark_list, function()
-    if not M.state or not M._bookmark then return end
+    if M.state or not M._bookmark then return end
     local items = M._bookmark:list()
     if #items == 0 then
       vim.notify("[ghost-reader] no bookmarks", vim.log.levels.WARN)
@@ -173,19 +163,6 @@ function M.go_to_chapter(idx)
   if not M.state then return end
   navigate.go_to_chapter(M.state, idx)
   M._render(M.state)
-end
-
-function M.switch_mode()
-  if not M.state then return end
-  local modes = { "minimal_diff", "clone_buffer", "sparse_notes", "code_camouflage", "dual_mode" }
-  local current = M.state.config.default_mode
-  local next_idx = 1
-  for i, m in ipairs(modes) do
-    if m == current then next_idx = i % #modes + 1; break end
-  end
-  M.state.config.default_mode = modes[next_idx]
-  M._render(M.state)
-  vim.notify("[ghost-reader] mode: " .. modes[next_idx], vim.log.levels.INFO)
 end
 
 function M.restore()

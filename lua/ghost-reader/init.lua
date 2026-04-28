@@ -1,6 +1,7 @@
 local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
+local reader = require("ghost-reader.reader")
 
 M.config = nil
 
@@ -13,11 +14,11 @@ end
 
 function M.open(path)
   if not M.config then M.setup() end
-  -- Will be implemented in Task 6
+  return reader.open(path, M.config)
 end
 
 function M.close()
-  -- Will be implemented in Task 6
+  reader.close()
 end
 
 return M

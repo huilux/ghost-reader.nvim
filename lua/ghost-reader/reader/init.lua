@@ -42,6 +42,13 @@ function M.open(path, config)
   M._render(state)
   M._set_keymaps(buf, config.keymaps)
   M._bookmark = nil
+
+  local book_name = vim.fn.fnamemodify(path, ":t:r")
+  vim.notify(
+    string.format("[ghost-reader] %s · %d chapters\nJ/K=翻页 ]c/[c=章节 <leader>gm=切换模式 <Esc><Esc>=老板键",
+      book_name, #book.chapters),
+    vim.log.levels.INFO
+  )
   vim.api.nvim_create_autocmd({ "BufUnload", "CursorHold" }, {
     buffer = buf,
     callback = function()

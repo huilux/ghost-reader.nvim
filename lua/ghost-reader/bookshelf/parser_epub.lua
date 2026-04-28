@@ -70,10 +70,9 @@ function M.parse(path, opts)
   local container = container_f:read("*a")
   container_f:close()
 
-  local opf_path = container:match('full%-%spath="([^"]+)"')
-  if not opf_path then
-    opf_path = container:match('href="([^"]+)"')
-  end
+  local opf_path = container:match('full%-path="([^"]+)"')
+    or container:match('full%-path=\'([^\']+)\'')
+    or container:match('href="([^"]+)"')
   if not opf_path then
     return nil, "invalid epub: no opf reference"
   end
@@ -93,8 +92,13 @@ function M.parse(path, opts)
   end
 
   local items = {}
-  for id, href, mt in opf:gmatch('<item[^>]+id="([^"]+)"[^>]+href="([^"]+)"[^>]+media%-type="([^"]+)"') do
-    items[id] = { href = href, media_type = mt }
+  for item_tag in opf:gmatch('<item[^>]+/?>') do
+    local id = item_tag:match('id="([^"]+)"') or item_tag:match("id='([^']+)'")
+    local href = item_tag:match('href="([^"]+)"') or item_tag:match("href='([^']+)'")
+    local mt = item_tag:match('media%-type="([^"]+)"') or item_tag:match("media%-type='([^']+)'")
+    if id and href and mt then
+      items[id] = { href = href, media_type = mt }
+    end
   end
 
   for _, idref in ipairs(spine_ids) do

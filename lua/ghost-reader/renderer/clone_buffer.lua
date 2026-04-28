@@ -31,12 +31,6 @@ local function get_string_content(line)
   return nil
 end
 
-local function shorten_for_context(text, max_chars)
-  max_chars = max_chars or 80
-  if vim.fn.strchars(text) <= max_chars then return text end
-  return vim.fn.strcharpart(text, 0, max_chars - 1) .. "…"
-end
-
 function M.render(book_lines, opts)
   opts = opts or {}
   local source_lines = opts.source_lines
@@ -63,7 +57,7 @@ function M.render(book_lines, opts)
     lines_since_last = lines_since_last + 1
     if lines_since_last < spacing then goto continue end
 
-    local book_text = shorten_for_context(book_lines[book_cursor])
+    local book_text = book_lines[book_cursor]
     book_cursor = book_cursor + 1
     lines_since_last = 0
 

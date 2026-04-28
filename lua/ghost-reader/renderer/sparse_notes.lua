@@ -35,9 +35,6 @@ function M.render(book_lines, opts)
 
     if book_cursor <= #book_lines and line_count >= insert_interval then
       local book_text = book_lines[book_cursor]
-      if #book_text > 60 then
-        book_text = book_text:sub(1, 57) .. ".."
-      end
       local tag = tags[tag_idx]
       tag_idx = tag_idx % #tags + 1
       local indent = line:match("^(%s)") or ""
@@ -50,9 +47,6 @@ function M.render(book_lines, opts)
 
   while book_cursor <= #book_lines and #result < 200 do
     local book_text = book_lines[book_cursor]
-    if vim.fn.strchars(book_text) > 80 then
-      book_text = vim.fn.strcharpart(book_text, 0, 79) .. "…"
-    end
     local tag = tags[tag_idx]
     tag_idx = tag_idx % #tags + 1
     table.insert(result, prefix .. tag .. ": " .. book_text)

@@ -3,6 +3,7 @@ local navigate = require("ghost-reader.reader.navigate")
 local bookshelf = require("ghost-reader.bookshelf")
 local utils = require("ghost-reader.utils")
 local stealth = require("ghost-reader.stealth")
+local statusline = require("ghost-reader.stealth.statusline")
 local renderer = require("ghost-reader.renderer")
 
 M.state = nil
@@ -35,6 +36,7 @@ function M.open(path, config)
   local boss_key = require("ghost-reader.stealth.boss_key")
   boss_key.capture_from_current()
 
+  statusline.save()
   M._render(state)
   M._set_keymaps(buf, config.keymaps)
   return true
@@ -59,6 +61,8 @@ function M._render(state)
   vim.api.nvim_buf_call(state.buf, function()
     vim.cmd("normal! gg")
   end)
+
+  statusline.apply(rendered.fake_path, rendered.filetype)
 end
 
 function M._set_keymaps(buf, keymaps)

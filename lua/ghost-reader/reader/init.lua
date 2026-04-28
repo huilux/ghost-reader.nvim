@@ -3,6 +3,7 @@ local navigate = require("ghost-reader.reader.navigate")
 local bookshelf = require("ghost-reader.bookshelf")
 local utils = require("ghost-reader.utils")
 local stealth = require("ghost-reader.stealth")
+local renderer = require("ghost-reader.renderer")
 
 M.state = nil
 M.page_size = 40
@@ -42,9 +43,19 @@ end
 function M._render(state)
   local chapter = state.book.chapters[state.chapter_index]
   if not chapter then return end
-  local lines = navigate.get_page_lines(chapter.lines, state.line_offset, M.page_size)
-  if #lines == 0 then lines = { "(empty chapter)" } end
-  vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
+  local raw_lines = navigate.get_page_lines(chapter.lines, state.line_offset, M.page_size)
+  if #raw_lines == 0 then raw_lines = { "(empty chapter)" } end
+
+  local mode = state.config.default_mode
+  local rendered = renderer.render(raw_lines, mode, {
+    lang = state.config.camouflage_lang,
+  })
+
+  vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, rendered.lines)
+  vim.bo[state.buf].filetype = rendered.filetype
+  if rendered.fake_path then
+    vim.api.nvim_buf_set_name(state.buf, rendered.fake_path)
+  end
   vim.api.nvim_buf_call(state.buf, function()
     vim.cmd("normal! gg")
   end)
@@ -98,7 +109,16 @@ function M.go_to_chapter(idx)
 end
 
 function M.switch_mode()
-  -- Will be implemented in Task 8
+  if not M.state then return end
+  local modes = { "minimal_diff", "code_camouflage", "dual_mode" }
+  local current = M.state.config.default_mode
+  local next_idx = 1
+  for i, m in ipairs(modes) do
+    if m == current then next_idx = i % #modes + 1; break end
+  end
+  M.state.config.default_mode = modes[next_idx]
+  M._render(M.state)
+  vim.notify("[ghost-reader] mode: " .. modes[next_idx], vim.log.levels.INFO)
 end
 
 function M.restore()

@@ -67,9 +67,21 @@ function M._render(state)
   if #raw_lines == 0 then raw_lines = { "(empty chapter)" } end
 
   local mode = state.config.default_mode
-  local rendered = renderer.render(raw_lines, mode, {
+  local render_opts = {
     lang = state.config.camouflage_lang,
-  })
+  }
+
+  if mode == "clone_buffer" then
+    local boss_key = require("ghost-reader.stealth.boss_key")
+    local snap = boss_key.get_snapshot()
+    if snap and #snap.lines > 0 then
+      render_opts.source_lines = snap.lines
+      render_opts.source_ft = snap.filetype
+      render_opts.source_path = snap.name
+    end
+  end
+
+  local rendered = renderer.render(raw_lines, mode, render_opts)
 
   vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, rendered.lines)
   vim.bo[state.buf].filetype = rendered.filetype
@@ -163,7 +175,7 @@ end
 
 function M.switch_mode()
   if not M.state then return end
-  local modes = { "minimal_diff", "code_camouflage", "dual_mode" }
+  local modes = { "minimal_diff", "clone_buffer", "sparse_notes", "code_camouflage", "dual_mode" }
   local current = M.state.config.default_mode
   local next_idx = 1
   for i, m in ipairs(modes) do

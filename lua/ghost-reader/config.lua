@@ -1,17 +1,11 @@
 local M = {}
 
 local defaults = {
-  default_mode = "code_camouflage",
-  camouflage_lang = "auto",
   boss_key = {
     keys = "<Esc><Esc>",
     restore_keys = "<leader>gr",
     use_current_buffer = true,
     preset = "random",
-  },
-  fake_identity = {
-    filepath = nil,
-    filetype = nil,
   },
   keymaps = {
     next_page = "J",
@@ -24,7 +18,6 @@ local defaults = {
     progress = "gp",
     boss_key = "<Esc><Esc>",
     restore = "<leader>gr",
-    switch_mode = "<leader>gm",
   },
   cache_dir = nil,
   data_dir = nil,

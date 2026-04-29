@@ -12,20 +12,20 @@ M._buf = nil
 M._win = nil
 M._augroup = nil
 
-local function char_width(c)
-  local b = c:byte()
-  if b < 0x80 then return 1 end
-  -- CJK, fullwidth, etc. count as 2
-  return 2
+local function utf8_next(s, i)
+  if i > #s then return nil end
+  local b = s:byte(i)
+  local len
+  if b < 0x80 then len = 1
+  elseif b < 0xE0 then len = 2
+  elseif b < 0xF0 then len = 3
+  else len = 4
+  end
+  return s:sub(i, i + len - 1), i + len
 end
 
-local function str_display_width(s)
-  local w = 0
-  for _, c in utf8.codes(s) do
-    local ch = utf8.char(c)
-    w = w + char_width(ch)
-  end
-  return w
+local function char_width(ch)
+  return vim.fn.strwidth(ch)
 end
 
 local function split_to_chunks(text, max_width)
@@ -33,9 +33,11 @@ local function split_to_chunks(text, max_width)
   local chunks = {}
   local current = ""
   local cur_w = 0
+  local i = 1
 
-  for _, c in utf8.codes(text) do
-    local ch = utf8.char(c)
+  while i <= #text do
+    local ch
+    ch, i = utf8_next(text, i)
     local cw = char_width(ch)
 
     if cur_w + cw > max_width and current ~= "" then

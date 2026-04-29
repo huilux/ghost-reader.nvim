@@ -6,13 +6,65 @@ local history = require("ghost-reader.history")
 
 M.state = nil
 M.timer = nil
-M.current_line = ""
+M.chunks = {}
+M.chunk_idx = 0
 M._buf = nil
 M._win = nil
 M._augroup = nil
 
+local function char_width(c)
+  local b = c:byte()
+  if b < 0x80 then return 1 end
+  -- CJK, fullwidth, etc. count as 2
+  return 2
+end
+
+local function str_display_width(s)
+  local w = 0
+  for _, c in utf8.codes(s) do
+    local ch = utf8.char(c)
+    w = w + char_width(ch)
+  end
+  return w
+end
+
+local function split_to_chunks(text, max_width)
+  if text == "" then return { "" } end
+  local chunks = {}
+  local current = ""
+  local cur_w = 0
+
+  for _, c in utf8.codes(text) do
+    local ch = utf8.char(c)
+    local cw = char_width(ch)
+
+    if cur_w + cw > max_width and current ~= "" then
+      table.insert(chunks, current)
+      current = ch
+      cur_w = cw
+    else
+      current = current .. ch
+      cur_w = cur_w + cw
+    end
+  end
+
+  if current ~= "" then
+    table.insert(chunks, current)
+  end
+
+  return chunks
+end
+
+local function get_max_width()
+  return vim.o.columns - 4
+end
+
+local function load_chunks(text)
+  M.chunks = split_to_chunks(text, get_max_width())
+  M.chunk_idx = 1
+end
+
 local function create_float_win()
-  -- close previous
   if M._win and vim.api.nvim_win_is_valid(M._win) then
     vim.api.nvim_win_close(M._win, true)
   end
@@ -26,10 +78,9 @@ local function create_float_win()
 
   local total_w = vim.o.columns
   local total_h = vim.o.lines
-  -- 1-row window at very bottom, above the real statusline
   local row = total_h - 3
 
-  local win_opts = {
+  M._win = vim.api.nvim_open_win(M._buf, false, {
     relative = "editor",
     width = total_w,
     height = 1,
@@ -38,10 +89,7 @@ local function create_float_win()
     style = "minimal",
     focusable = false,
     zindex = 50,
-  }
-
-  M._win = vim.api.nvim_open_win(M._buf, false, win_opts)
-  -- dark background, subtle text color
+  })
   vim.wo[M._win].winhl = "Normal:Comment"
   vim.wo[M._win].wrap = false
 end
@@ -49,57 +97,82 @@ end
 local function refresh_display()
   if not M._buf or not vim.api.nvim_buf_is_valid(M._buf) then return end
   local st = M.state
-  local icon = st and (st.auto_mode and "▶" or "‖") or ""
-  local line = icon .. " " .. M.current_line
-  vim.api.nvim_buf_set_lines(M._buf, 0, -1, false, { line })
+  local icon = st and (st.auto_mode and "▶ " or "‖ ") or ""
+  local text = M.chunks[M.chunk_idx] or ""
+  vim.api.nvim_buf_set_lines(M._buf, 0, -1, false, { icon .. text })
 end
 
-local function advance()
-  if not M.state then return end
+local function advance_line()
+  if not M.state then return false end
   local st = M.state
   local chapter = st.book.chapters[st.chapter_index]
-  if not chapter then M.stop(); return end
+  if not chapter then return false end
 
   while true do
     st.line_offset = st.line_offset + 1
     if st.line_offset > #chapter.lines then
       if st.chapter_index >= #st.book.chapters then
-        M.current_line = "(END)"
-        refresh_display()
-        return
+        load_chunks("(END)")
+        return false
       end
       st.chapter_index = st.chapter_index + 1
       st.line_offset = 0
       chapter = st.book.chapters[st.chapter_index]
     else
-      break
+      local line = chapter.lines[st.line_offset]
+      if line and line ~= "" then
+        load_chunks(line)
+        return true
+      end
     end
   end
+end
 
-  M.current_line = chapter.lines[st.line_offset] or ""
+local function advance()
+  if not M.state then return end
+  -- show next chunk of current line
+  if M.chunk_idx < #M.chunks then
+    M.chunk_idx = M.chunk_idx + 1
+  else
+    advance_line()
+  end
   refresh_display()
 end
 
-local function go_back()
+local function go_back_line()
   if not M.state then return end
   local st = M.state
   local chapter = st.book.chapters[st.chapter_index]
   if not chapter then return end
 
-  for _ = 1, 2 do
+  while true do
     st.line_offset = st.line_offset - 1
     if st.line_offset < 1 then
       if st.chapter_index <= 1 then
         st.line_offset = 1
+        chapter = st.book.chapters[1]
         break
       end
       st.chapter_index = st.chapter_index - 1
       chapter = st.book.chapters[st.chapter_index]
       st.line_offset = #chapter.lines
     end
+    if chapter.lines[st.line_offset] and chapter.lines[st.line_offset] ~= "" then
+      break
+    end
   end
 
-  M.current_line = chapter.lines[st.line_offset] or ""
+  load_chunks(chapter.lines[st.line_offset] or "")
+end
+
+local function go_back()
+  if not M.state then return end
+  -- go to previous chunk, or previous line
+  if M.chunk_idx > 1 then
+    M.chunk_idx = M.chunk_idx - 1
+  else
+    go_back_line()
+  end
   refresh_display()
 end
 
@@ -143,30 +216,29 @@ function M.start(path, config)
     interval = sl_cfg.interval or 3000,
     config = config,
   }
-  M.current_line = ""
+  M.chunks = {}
+  M.chunk_idx = 0
 
   create_float_win()
 
-  -- reposition on vim resize
   M._augroup = vim.api.nvim_create_augroup("ghost-reader-statusline", { clear = true })
   vim.api.nvim_create_autocmd("VimResized", {
     group = M._augroup,
     callback = function()
       if M._win and vim.api.nvim_win_is_valid(M._win) then
-        local total_w = vim.o.columns
-        local total_h = vim.o.lines
         vim.api.nvim_win_set_config(M._win, {
           relative = "editor",
-          width = total_w,
+          width = vim.o.columns,
           height = 1,
-          row = total_h - 3,
+          row = vim.o.lines - 3,
           col = 0,
         })
       end
     end,
   })
 
-  advance()
+  advance_line()
+  refresh_display()
 
   if auto_mode then start_timer() end
 
@@ -205,7 +277,8 @@ function M.stop()
     bookshelf.close()
   end
   M.state = nil
-  M.current_line = ""
+  M.chunks = {}
+  M.chunk_idx = 0
   for _, key in ipairs({ "J", "K", "+", "-", "m", "q" }) do
     pcall(vim.keymap.del, "n", key, { buffer = 0 })
   end

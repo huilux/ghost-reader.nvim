@@ -41,10 +41,29 @@ end
 
 function M.select_book()
   if not M.config then M.setup() end
+  local stealth = require("ghost-reader.stealth")
+  local boss_key = require("ghost-reader.stealth.boss_key")
 
-  -- if fullscreen reader is active, switch back to it
+  -- if boss key is active (fullscreen), restore first
+  if boss_key.is_active() and reader.state then
+    reader.restore()
+    return
+  end
+
+  -- if statusline reader is hidden, restore it
+  if reader_statusline.state and reader_statusline._hidden then
+    reader_statusline.restore()
+    return
+  end
+
+  -- if fullscreen reader buffer exists, switch back
   if reader.state and vim.api.nvim_buf_is_valid(reader.state.buf) then
     vim.api.nvim_set_current_buf(reader.state.buf)
+    return
+  end
+
+  -- if statusline reader is active, just refocus
+  if reader_statusline.state then
     return
   end
 

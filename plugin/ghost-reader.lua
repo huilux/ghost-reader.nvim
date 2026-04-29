@@ -32,7 +32,7 @@ vim.api.nvim_create_user_command("GhostReaderStatusline", function(opts)
   if not gr.config then gr.setup() end
   local path = opts.args
   if path ~= "" then
-    require("ghost-reader.statusline_reader").start(vim.fn.expand(path), gr.config)
+    require("ghost-reader.reader.statusline").start(vim.fn.expand(path), gr.config)
   else
     gr.select_book()
   end

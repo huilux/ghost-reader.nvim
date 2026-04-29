@@ -3,7 +3,7 @@ local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local reader = require("ghost-reader.reader")
 local history = require("ghost-reader.history")
-local statusline_reader = require("ghost-reader.statusline_reader")
+local reader_statusline = require("ghost-reader.reader.statusline")
 
 M.config = nil
 
@@ -65,7 +65,7 @@ function M.select_book()
       if mode_idx == 1 then
         M.open(path)
       else
-        statusline_reader.start(path, M.config)
+        reader_statusline.start(path, M.config)
       end
     end)
   end)

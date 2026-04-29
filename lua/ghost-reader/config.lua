@@ -3,7 +3,6 @@ local M = {}
 local defaults = {
   boss_key = {
     keys = "<Esc><Esc>",
-    restore_keys = "<leader>gr",
     use_current_buffer = true,
     preset = "random",
   },
@@ -17,7 +16,6 @@ local defaults = {
     toc = "gt",
     progress = "gp",
     boss_key = "<Esc><Esc>",
-    restore = "<leader>gr",
   },
   statusline = {
     interval = 3000,

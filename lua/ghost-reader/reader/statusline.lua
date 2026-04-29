@@ -283,7 +283,7 @@ function M.stop()
   M.chunks = {}
   M.chunk_idx = 0
   M._hidden = false
-  for _, key in ipairs({ "J", "K", "+", "-", "m", "q", "<Esc>", "<leader>gr" }) do
+  for _, key in ipairs({ "J", "K", "+", "-", "m", "q", "<Esc>" }) do
     pcall(vim.keymap.del, "n", key, { buffer = 0 })
   end
 end
@@ -360,10 +360,6 @@ function M._set_keymaps()
 
   vim.keymap.set("n", "<Esc><Esc>", function()
     M.hide()
-  end, opts)
-
-  vim.keymap.set("n", "<leader>gr", function()
-    M.restore()
   end, opts)
 end
 

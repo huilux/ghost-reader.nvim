@@ -24,6 +24,56 @@ local comment_prefixes = {
 
 local tags = { "TODO", "FIXME", "NOTE", "HACK", "XXX", "REFACTOR", "OPTIMIZE", "REVIEW" }
 
+local function utf8_next(s, i)
+  if i > #s then return nil end
+  local b = s:byte(i)
+  local len
+  if b < 0x80 then len = 1
+  elseif b < 0xE0 then len = 2
+  elseif b < 0xF0 then len = 3
+  else len = 4
+  end
+  return s:sub(i, i + len - 1), i + len
+end
+
+local function wrap_comment(text, prefix, tag, indent, max_width)
+  local header = indent .. prefix .. tag .. ": "
+  local header_w = vim.fn.strwidth(header)
+  local body_w = max_width - header_w
+  if body_w < 20 then body_w = 20 end
+
+  local text_w = vim.fn.strwidth(text)
+  if text_w <= body_w then
+    return { header .. text }
+  end
+
+  local lines = {}
+  -- first line has tag header
+  local cur = header
+  local cur_w = header_w
+  local i = 1
+  local first = true
+
+  while i <= #text do
+    local ch, next_i = utf8_next(text, i)
+    local cw = vim.fn.strwidth(ch)
+    if cur_w + cw > max_width then
+      table.insert(lines, cur)
+      cur = indent .. prefix .. (first and "" or "  ")
+      cur_w = vim.fn.strwidth(cur)
+      first = false
+    end
+    cur = cur .. ch
+    cur_w = cur_w + cw
+    i = next_i
+  end
+  if cur ~= indent .. prefix then
+    table.insert(lines, cur)
+  end
+
+  return lines
+end
+
 local function get_real_buffer_lines()
   local bufs = vim.api.nvim_list_bufs()
   local candidates = {}
@@ -104,9 +154,11 @@ function M.render(book_lines, opts)
       local book_text = book_lines[book_cursor]
       local tag = tags[tag_idx]
       tag_idx = tag_idx % #tags + 1
-      -- Match the indentation of the current line
       local indent = line:match("^(%s+)") or ""
-      table.insert(result, indent .. prefix .. tag .. ": " .. book_text)
+      local wrapped = wrap_comment(book_text, prefix, tag, indent, 80)
+      for _, wl in ipairs(wrapped) do
+        table.insert(result, wl)
+      end
       book_cursor = book_cursor + 1
       line_count = 0
       insert_interval = math.random(5, 8)
@@ -120,7 +172,10 @@ function M.render(book_lines, opts)
     while book_cursor <= #book_lines do
       local tag = tags[tag_idx]
       tag_idx = tag_idx % #tags + 1
-      table.insert(result, prefix .. tag .. ": " .. book_lines[book_cursor])
+      local wrapped = wrap_comment(book_lines[book_cursor], prefix, tag, "", 80)
+      for _, wl in ipairs(wrapped) do
+        table.insert(result, wl)
+      end
       book_cursor = book_cursor + 1
       count = count + 1
       if book_cursor <= #book_lines and count >= gap then

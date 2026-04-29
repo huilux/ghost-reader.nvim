@@ -21,6 +21,7 @@ local defaults = {
   },
   statusline = {
     interval = 3000,
+    mode = "auto",
   },
   cache_dir = nil,
   data_dir = nil,

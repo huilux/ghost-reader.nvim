@@ -41,6 +41,13 @@ end
 
 function M.select_book()
   if not M.config then M.setup() end
+
+  -- if fullscreen reader is active, switch back to it
+  if reader.state and vim.api.nvim_buf_is_valid(reader.state.buf) then
+    vim.api.nvim_set_current_buf(reader.state.buf)
+    return
+  end
+
   local entries = history.load(M.config)
   local items = {}
   for _, e in ipairs(entries) do

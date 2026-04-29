@@ -43,7 +43,7 @@ function M.open(path, config)
 
   vim.api.nvim_set_current_buf(buf)
   vim.bo[buf].buftype = "nofile"
-  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].modifiable = true
 
   statusline.save()

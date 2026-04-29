@@ -129,8 +129,15 @@ function M.render(book_lines, opts)
 
   local prefix = comment_prefixes[ft] or comment_prefixes[lang] or "// "
 
-  -- Repeat skeleton to fill ~150 lines
-  local target_lines = 150
+  -- estimate how many lines each book line will produce after wrapping
+  local total_comment_lines = 0
+  for _, bl in ipairs(book_lines) do
+    local wrapped = wrap_comment(bl, prefix, tags[1], "", 80)
+    total_comment_lines = total_comment_lines + #wrapped
+  end
+
+  -- skeleton lines needed: spacing (avg 6.5) * book_lines + comment lines
+  local target_lines = math.max(150, math.ceil(#book_lines * 6.5) + total_comment_lines + 10)
   local full_skeleton = {}
   while #full_skeleton < target_lines do
     for _, line in ipairs(skeleton) do
@@ -141,7 +148,6 @@ function M.render(book_lines, opts)
 
   local result = {}
   local book_cursor = 1
-  -- Sparse spacing: 5-8 lines between each book comment
   local insert_interval = math.random(5, 8)
   local line_count = 0
   local tag_idx = math.random(1, #tags)
@@ -162,29 +168,6 @@ function M.render(book_lines, opts)
       book_cursor = book_cursor + 1
       line_count = 0
       insert_interval = math.random(5, 8)
-    end
-  end
-
-  -- Append remaining book lines at the end with spacing
-  if book_cursor <= #book_lines then
-    local gap = math.random(3, 5)
-    local count = 0
-    while book_cursor <= #book_lines do
-      local tag = tags[tag_idx]
-      tag_idx = tag_idx % #tags + 1
-      local wrapped = wrap_comment(book_lines[book_cursor], prefix, tag, "", 80)
-      for _, wl in ipairs(wrapped) do
-        table.insert(result, wl)
-      end
-      book_cursor = book_cursor + 1
-      count = count + 1
-      if book_cursor <= #book_lines and count >= gap then
-        -- insert a skeleton line as separator
-        local skel_idx = (count % #skeleton) + 1
-        table.insert(result, skeleton[skel_idx])
-        count = 0
-        gap = math.random(3, 5)
-      end
     end
   end
 

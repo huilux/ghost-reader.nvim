@@ -11,6 +11,7 @@ M.chunk_idx = 0
 M._buf = nil
 M._win = nil
 M._augroup = nil
+M._hidden = false
 
 local function utf8_next(s, i)
   if i > #s then return nil end
@@ -281,9 +282,35 @@ function M.stop()
   M.state = nil
   M.chunks = {}
   M.chunk_idx = 0
-  for _, key in ipairs({ "J", "K", "+", "-", "m", "q" }) do
+  M._hidden = false
+  for _, key in ipairs({ "J", "K", "+", "-", "m", "q", "<Esc>", "<leader>gr" }) do
     pcall(vim.keymap.del, "n", key, { buffer = 0 })
   end
+end
+
+function M.hide()
+  if not M.state or M._hidden then return end
+  M._hidden = true
+  if M.timer then
+    vim.fn.timer_stop(M.timer)
+    M.timer = nil
+  end
+  if M._win and vim.api.nvim_win_is_valid(M._win) then
+    vim.api.nvim_win_close(M._win, true)
+    M._win = nil
+  end
+  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
+    vim.api.nvim_buf_delete(M._buf, { force = true })
+    M._buf = nil
+  end
+end
+
+function M.restore()
+  if not M.state or not M._hidden then return end
+  M._hidden = false
+  create_float_win()
+  refresh_display()
+  if M.state.auto_mode then start_timer() end
 end
 
 function M._set_keymaps()
@@ -329,6 +356,14 @@ function M._set_keymaps()
   vim.keymap.set("n", "q", function()
     M.stop()
     vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
+  end, opts)
+
+  vim.keymap.set("n", "<Esc><Esc>", function()
+    M.hide()
+  end, opts)
+
+  vim.keymap.set("n", "<leader>gr", function()
+    M.restore()
   end, opts)
 end
 

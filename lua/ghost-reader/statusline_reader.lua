@@ -7,20 +7,51 @@ local history = require("ghost-reader.history")
 M.state = nil
 M.timer = nil
 M.current_line = ""
-M._saved_statusline = nil
+M._buf = nil
+M._win = nil
 M._augroup = nil
 
-local function apply_statusline()
-  if not M.current_line or M.current_line == "" then return end
-  local st = M.state
-  local icon = st and (st.auto_mode and " ▶ " or " ‖ ") or ""
-  local text = M.current_line
-  local max = vim.o.columns - 30
-  if #text > max then
-    text = text:sub(1, max) .. "…"
+local function create_float_win()
+  -- close previous
+  if M._win and vim.api.nvim_win_is_valid(M._win) then
+    vim.api.nvim_win_close(M._win, true)
   end
-  local sl = " %t %m %y %=" .. icon .. text .. "  %l,%c "
-  vim.api.nvim_set_option_value("statusline", sl, { win = vim.api.nvim_get_current_win() })
+  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
+    vim.api.nvim_buf_delete(M._buf, { force = true })
+  end
+
+  M._buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[M._buf].buftype = "nofile"
+  vim.bo[M._buf].bufhidden = "wipe"
+
+  local total_w = vim.o.columns
+  local total_h = vim.o.lines
+  -- 1-row window at very bottom, above the real statusline
+  local row = total_h - 3
+
+  local win_opts = {
+    relative = "editor",
+    width = total_w,
+    height = 1,
+    row = row,
+    col = 0,
+    style = "minimal",
+    focusable = false,
+    zindex = 50,
+  }
+
+  M._win = vim.api.nvim_open_win(M._buf, false, win_opts)
+  -- dark background, subtle text color
+  vim.wo[M._win].winhl = "Normal:Comment"
+  vim.wo[M._win].wrap = false
+end
+
+local function refresh_display()
+  if not M._buf or not vim.api.nvim_buf_is_valid(M._buf) then return end
+  local st = M.state
+  local icon = st and (st.auto_mode and "▶" or "‖") or ""
+  local line = icon .. " " .. M.current_line
+  vim.api.nvim_buf_set_lines(M._buf, 0, -1, false, { line })
 end
 
 local function advance()
@@ -34,7 +65,7 @@ local function advance()
     if st.line_offset > #chapter.lines then
       if st.chapter_index >= #st.book.chapters then
         M.current_line = "(END)"
-        apply_statusline()
+        refresh_display()
         return
       end
       st.chapter_index = st.chapter_index + 1
@@ -46,7 +77,7 @@ local function advance()
   end
 
   M.current_line = chapter.lines[st.line_offset] or ""
-  apply_statusline()
+  refresh_display()
 end
 
 local function go_back()
@@ -69,7 +100,7 @@ local function go_back()
   end
 
   M.current_line = chapter.lines[st.line_offset] or ""
-  apply_statusline()
+  refresh_display()
 end
 
 local function start_timer()
@@ -101,8 +132,6 @@ function M.start(path, config)
     line_offset = saved.line_offset or 0
   end
 
-  M._saved_statusline = vim.o.statusline
-
   local sl_cfg = config.statusline or {}
   local auto_mode = sl_cfg.mode ~= "manual"
 
@@ -116,12 +145,24 @@ function M.start(path, config)
   }
   M.current_line = ""
 
-  -- keep statusline alive across window switches
+  create_float_win()
+
+  -- reposition on vim resize
   M._augroup = vim.api.nvim_create_augroup("ghost-reader-statusline", { clear = true })
-  vim.api.nvim_create_autocmd("WinEnter", {
+  vim.api.nvim_create_autocmd("VimResized", {
     group = M._augroup,
     callback = function()
-      if M.state then apply_statusline() end
+      if M._win and vim.api.nvim_win_is_valid(M._win) then
+        local total_w = vim.o.columns
+        local total_h = vim.o.lines
+        vim.api.nvim_win_set_config(M._win, {
+          relative = "editor",
+          width = total_w,
+          height = 1,
+          row = total_h - 3,
+          col = 0,
+        })
+      end
     end,
   })
 
@@ -150,6 +191,14 @@ function M.stop()
     vim.api.nvim_del_augroup_by_name("ghost-reader-statusline")
     M._augroup = nil
   end
+  if M._win and vim.api.nvim_win_is_valid(M._win) then
+    vim.api.nvim_win_close(M._win, true)
+  end
+  M._win = nil
+  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
+    vim.api.nvim_buf_delete(M._buf, { force = true })
+  end
+  M._buf = nil
   if M.state then
     local fake_book = { path = M.state.book.path, chapters = M.state.book.chapters }
     progress.save(fake_book, M.state, M.state.config)
@@ -157,11 +206,6 @@ function M.stop()
   end
   M.state = nil
   M.current_line = ""
-  if M._saved_statusline then
-    vim.api.nvim_set_option_value("statusline", M._saved_statusline,
-      { win = vim.api.nvim_get_current_win() })
-    M._saved_statusline = nil
-  end
   for _, key in ipairs({ "J", "K", "+", "-", "m", "q" }) do
     pcall(vim.keymap.del, "n", key, { buffer = 0 })
   end
@@ -204,7 +248,7 @@ function M._set_keymaps()
       if M.timer then vim.fn.timer_stop(M.timer); M.timer = nil end
       vim.notify("[ghost-reader] manual ‖", vim.log.levels.INFO)
     end
-    apply_statusline()
+    refresh_display()
   end, opts)
 
   vim.keymap.set("n", "q", function()

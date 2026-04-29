@@ -19,6 +19,9 @@ local defaults = {
     boss_key = "<Esc><Esc>",
     restore = "<leader>gr",
   },
+  statusline = {
+    interval = 3000,
+  },
   cache_dir = nil,
   data_dir = nil,
 }

@@ -3,6 +3,7 @@ local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local reader = require("ghost-reader.reader")
 local history = require("ghost-reader.history")
+local statusline_reader = require("ghost-reader.statusline_reader")
 
 M.config = nil
 
@@ -49,13 +50,24 @@ function M.select_book()
 
   vim.ui.select(items, { prompt = "Select book:" }, function(_, idx)
     if not idx then return end
+    local path
     if idx <= #entries then
-      M.open(entries[idx].path)
+      path = entries[idx].path
     else
       vim.ui.input({ prompt = "Book path: ", completion = "file" }, function(input)
         if input and input ~= "" then M.open(vim.fn.expand(input)) end
       end)
+      return
     end
+    local mode_items = { "sparse_notes (全屏)", "statusline (状态栏)" }
+    vim.ui.select(mode_items, { prompt = "Reading mode:" }, function(_, mode_idx)
+      if not mode_idx then M.open(path); return end
+      if mode_idx == 1 then
+        M.open(path)
+      else
+        statusline_reader.start(path, M.config)
+      end
+    end)
   end)
 end
 

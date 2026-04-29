@@ -8,19 +8,19 @@ M.state = nil
 M.timer = nil
 M.current_line = ""
 M._saved_statusline = nil
+M._augroup = nil
 
-function M.statusline()
-  local mode_text = ""
-  if M.state then
-    mode_text = M.state.auto_mode and " ▶ " or " ‖ "
+local function apply_statusline()
+  if not M.current_line or M.current_line == "" then return end
+  local st = M.state
+  local icon = st and (st.auto_mode and " ▶ " or " ‖ ") or ""
+  local text = M.current_line
+  local max = vim.o.columns - 30
+  if #text > max then
+    text = text:sub(1, max) .. "…"
   end
-  return " %t %m %y %=" .. mode_text .. M.current_line .. "  %l,%c "
-end
-
-local function update_display(text)
-  if text and text ~= "" then
-    M.current_line = text
-  end
+  local sl = " %t %m %y %=" .. icon .. text .. "  %l,%c "
+  vim.api.nvim_set_option_value("statusline", sl, { win = vim.api.nvim_get_current_win() })
 end
 
 local function advance()
@@ -29,12 +29,12 @@ local function advance()
   local chapter = st.book.chapters[st.chapter_index]
   if not chapter then M.stop(); return end
 
-  -- skip empty lines
   while true do
     st.line_offset = st.line_offset + 1
     if st.line_offset > #chapter.lines then
       if st.chapter_index >= #st.book.chapters then
         M.current_line = "(END)"
+        apply_statusline()
         return
       end
       st.chapter_index = st.chapter_index + 1
@@ -45,7 +45,8 @@ local function advance()
     end
   end
 
-  update_display(chapter.lines[st.line_offset])
+  M.current_line = chapter.lines[st.line_offset] or ""
+  apply_statusline()
 end
 
 local function go_back()
@@ -67,7 +68,8 @@ local function go_back()
     end
   end
 
-  update_display(chapter.lines[st.line_offset])
+  M.current_line = chapter.lines[st.line_offset] or ""
+  apply_statusline()
 end
 
 local function start_timer()
@@ -114,12 +116,15 @@ function M.start(path, config)
   }
   M.current_line = ""
 
-  -- use %! expression so statusline always re-evaluates
-  vim.api.nvim_set_option_value("statusline",
-    "%!v:lua.require('ghost-reader.statusline_reader').statusline()",
-    { win = vim.api.nvim_get_current_win() })
+  -- keep statusline alive across window switches
+  M._augroup = vim.api.nvim_create_augroup("ghost-reader-statusline", { clear = true })
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = M._augroup,
+    callback = function()
+      if M.state then apply_statusline() end
+    end,
+  })
 
-  -- show first line
   advance()
 
   if auto_mode then start_timer() end
@@ -140,6 +145,10 @@ function M.stop()
   if M.timer then
     vim.fn.timer_stop(M.timer)
     M.timer = nil
+  end
+  if M._augroup then
+    vim.api.nvim_del_augroup_by_name("ghost-reader-statusline")
+    M._augroup = nil
   end
   if M.state then
     local fake_book = { path = M.state.book.path, chapters = M.state.book.chapters }
@@ -195,6 +204,7 @@ function M._set_keymaps()
       if M.timer then vim.fn.timer_stop(M.timer); M.timer = nil end
       vim.notify("[ghost-reader] manual ‖", vim.log.levels.INFO)
     end
+    apply_statusline()
   end, opts)
 
   vim.keymap.set("n", "q", function()

@@ -2,7 +2,6 @@ local M = {}
 local navigate = require("ghost-reader.reader.navigate")
 local bookshelf = require("ghost-reader.bookshelf")
 local utils = require("ghost-reader.utils")
-local stealth = require("ghost-reader.stealth")
 local statusline = require("ghost-reader.stealth.statusline")
 local renderer = require("ghost-reader.renderer")
 local bookmark = require("ghost-reader.reader.bookmark")
@@ -18,15 +17,13 @@ function M.open(path, config)
     return false
   end
 
-  stealth.setup(config)
-  local boss_key = require("ghost-reader.stealth.boss_key")
-  boss_key.capture_from_current()
-
+  local prev_buf = vim.api.nvim_get_current_buf()
   local buf = vim.api.nvim_create_buf(false, true)
 
   local state = {
     book = book,
     buf = buf,
+    prev_buf = prev_buf,
     chapter_index = 1,
     line_offset = 0,
     config = config,
@@ -99,7 +96,11 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.next_chapter, function() M.next_chapter() end)
   map(keymaps.prev_chapter, function() M.prev_chapter() end)
   map(keymaps.boss_key, function()
-    stealth.activate_boss_key(M.state and M.state.buf)
+    if M.state and vim.api.nvim_buf_is_valid(M.state.prev_buf) then
+      -- save progress and switch back to previous buffer
+      progress.save(M.state.book, M.state, M.state.config)
+      vim.api.nvim_set_current_buf(M.state.prev_buf)
+    end
   end)
 
   map(keymaps.bookmark_add, function()
@@ -165,8 +166,9 @@ function M.go_to_chapter(idx)
 end
 
 function M.restore()
-  stealth.deactivate_boss_key(M.state and M.state.buf)
-  if M.state then M._render(M.state) end
+  if M.state and vim.api.nvim_buf_is_valid(M.state.buf) then
+    vim.api.nvim_set_current_buf(M.state.buf)
+  end
 end
 
 function M.close()

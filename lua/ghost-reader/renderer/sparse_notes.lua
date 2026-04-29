@@ -113,23 +113,23 @@ function M.render(book_lines, opts)
     end
   end
 
-  -- If book text remains, spread evenly (not clustered)
+  -- Append remaining book lines at the end with spacing
   if book_cursor <= #book_lines then
-    local remaining = {}
+    local gap = math.random(3, 5)
+    local count = 0
     while book_cursor <= #book_lines do
-      table.insert(remaining, book_lines[book_cursor])
+      local tag = tags[tag_idx]
+      tag_idx = tag_idx % #tags + 1
+      table.insert(result, prefix .. tag .. ": " .. book_lines[book_cursor])
       book_cursor = book_cursor + 1
-    end
-    local step = math.max(6, math.floor(#result / (#remaining + 1)))
-    local insert_positions = {}
-    for i = 1, #remaining do
-      local pos = math.min(step * i, #result + 1)
-      table.insert(insert_positions, pos)
-    end
-    for i = #remaining, 1, -1 do
-      local pos = insert_positions[i]
-      local tag = tags[(tag_idx + i - 2) % #tags + 1]
-      table.insert(result, pos, prefix .. tag .. ": " .. remaining[i])
+      count = count + 1
+      if book_cursor <= #book_lines and count >= gap then
+        -- insert a skeleton line as separator
+        local skel_idx = (count % #skeleton) + 1
+        table.insert(result, skeleton[skel_idx])
+        count = 0
+        gap = math.random(3, 5)
+      end
     end
   end
 

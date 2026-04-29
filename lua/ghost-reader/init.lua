@@ -50,6 +50,7 @@ function M.select_book()
 
   -- if fullscreen reader buffer exists (possibly in background), switch back
   if reader.state and vim.api.nvim_buf_is_valid(reader.state.buf) then
+    reader.state.prev_buf = vim.api.nvim_get_current_buf()
     vim.api.nvim_set_current_buf(reader.state.buf)
     return
   end

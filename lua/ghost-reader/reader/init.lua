@@ -88,7 +88,8 @@ end
 function M._set_keymaps(buf, keymaps)
   local function map(key, action)
     if not key then return end
-    vim.keymap.set("n", key, action, { buffer = buf, nowait = true, silent = true })
+    local resolved = key:gsub("<leader>", vim.g.mapleader or "\\")
+    vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true })
   end
 
   map(keymaps.next_page, function() M.next_page() end)
@@ -122,7 +123,7 @@ function M._set_keymaps(buf, keymaps)
   end)
 
   map(keymaps.bookmark_list, function()
-    if M.state or not M._bookmark then return end
+    if not M.state or not M._bookmark then return end
     local items = M._bookmark:list()
     if #items == 0 then
       vim.notify("[ghost-reader] no bookmarks", vim.log.levels.WARN)

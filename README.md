@@ -49,7 +49,7 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 | `[c` | 上一章 |
 | `<leader>gt` | 打开目录跳转 |
 | `gp` | 显示阅读进度 |
-| `<Esc><Esc>` | 老板键：切回之前的工作 buffer |
+| `<leader>gb` | 老板键：切回之前的工作 buffer |
 
 ### 状态栏模式快捷键（buffer-local）
 
@@ -63,7 +63,7 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 | `<leader>g-` | 减速（每次 +500ms） |
 | `<leader>gm` | 切换自动/手动模式 |
 | `<leader>gq` | 退出状态栏阅读 |
-| `<Esc><Esc>` | 老板键：隐藏浮动窗口 |
+| `<leader>gb` | 老板键：隐藏浮动窗口 |
 
 ## 安装
 
@@ -80,7 +80,7 @@ return {
   },
   opts = {
     boss_key = {
-      keys = '<Esc><Esc>',
+      keys = '<leader>gb',
       use_current_buffer = true,
       preset = 'random',
     },

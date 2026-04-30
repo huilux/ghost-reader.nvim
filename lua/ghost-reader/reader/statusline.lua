@@ -284,7 +284,7 @@ function M.stop()
   M.chunk_idx = 0
   M._hidden = false
   local leader = vim.g.mapleader or "\\"
-  local keys = { "J", "K", "<Esc>" }
+  local keys = { "J", "K" }
   for _, k in ipairs({ "g+", "g-", "gm", "gq" }) do
     table.insert(keys, leader .. k)
   end
@@ -367,7 +367,7 @@ function M._set_keymaps()
     vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
   end, "Ghost-reader 退出")
 
-  map("<Esc><Esc>", function()
+  map("<leader>gb", function()
     M.hide()
   end, "Ghost-reader 老板键")
 end

@@ -97,10 +97,20 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.prev_chapter, function() M.prev_chapter() end)
   map(keymaps.boss_key, function()
     if M.state and vim.api.nvim_buf_is_valid(M.state.prev_buf) then
-      -- save progress and switch back to previous buffer
       progress.save(M.state.book, M.state, M.state.config)
       vim.api.nvim_set_current_buf(M.state.prev_buf)
     end
+  end)
+
+  map(keymaps.toc, function()
+    if not M.state then return end
+    local items = {}
+    for _, entry in ipairs(M.state.book.toc) do
+      table.insert(items, entry.title)
+    end
+    vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
+      if idx then M.go_to_chapter(idx) end
+    end)
   end)
 
   map(keymaps.bookmark_add, function()

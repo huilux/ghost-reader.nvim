@@ -4,7 +4,6 @@ local bookshelf = require("ghost-reader.bookshelf")
 local utils = require("ghost-reader.utils")
 local statusline = require("ghost-reader.stealth.statusline")
 local renderer = require("ghost-reader.renderer")
-local bookmark = require("ghost-reader.reader.bookmark")
 local progress = require("ghost-reader.reader.progress")
 
 M.state = nil
@@ -46,7 +45,6 @@ function M.open(path, config)
   statusline.save()
   M._render(state)
   M._set_keymaps(buf, config.keymaps)
-  M._bookmark = nil
 
   local book_name = vim.fn.fnamemodify(path, ":t:r")
   vim.notify(
@@ -111,33 +109,6 @@ function M._set_keymaps(buf, keymaps)
     end
     vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
       if idx then M.go_to_chapter(idx) end
-    end)
-  end)
-
-  map(keymaps.bookmark_add, function()
-    if not M.state then return end
-    local row = vim.api.nvim_win_get_cursor(0)[1]
-    M._bookmark = M._bookmark or bookmark.new("current")
-    M._bookmark:add(row)
-    vim.notify("[ghost-reader] bookmark added at line " .. row, vim.log.levels.INFO)
-  end)
-
-  map(keymaps.bookmark_list, function()
-    if not M.state or not M._bookmark then return end
-    local items = M._bookmark:list()
-    if #items == 0 then
-      vim.notify("[ghost-reader] no bookmarks", vim.log.levels.WARN)
-      return
-    end
-    vim.ui.select(items, {
-      prompt = "Bookmarks:",
-      format_item = function(item)
-        return "L" .. item.line .. (item.note ~= "" and (" - " .. item.note) or "")
-      end,
-    }, function(choice)
-      if choice then
-        vim.api.nvim_win_set_cursor(0, { choice.line, 0 })
-      end
     end)
   end)
 

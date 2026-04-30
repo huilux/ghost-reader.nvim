@@ -283,7 +283,12 @@ function M.stop()
   M.chunks = {}
   M.chunk_idx = 0
   M._hidden = false
-  for _, key in ipairs({ "J", "K", "+", "-", "m", "q", "<Esc>" }) do
+  local leader = vim.g.mapleader or "\\"
+  local keys = { "J", "K", "<Esc>" }
+  for _, k in ipairs({ "g+", "g-", "gm", "gq" }) do
+    table.insert(keys, leader .. k)
+  end
+  for _, key in ipairs(keys) do
     pcall(vim.keymap.del, "n", key, { buffer = 0 })
   end
 end
@@ -314,33 +319,37 @@ function M.restore()
 end
 
 function M._set_keymaps()
-  local opts = { buffer = 0, nowait = true, silent = true }
+  local leader = vim.g.mapleader or "\\"
+  local function map(key, action)
+    local resolved = key:gsub("<leader>", leader)
+    vim.keymap.set("n", resolved, action, { buffer = 0, nowait = true, silent = true })
+  end
 
-  vim.keymap.set("n", "J", function()
+  map("J", function()
     advance()
     if M.state and M.state.auto_mode then start_timer() end
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "K", function()
+  map("K", function()
     go_back()
     if M.state and M.state.auto_mode then start_timer() end
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "+", function()
+  map("<leader>g+", function()
     if not M.state then return end
     M.state.interval = math.max(500, M.state.interval - 500)
     if M.state.auto_mode then start_timer() end
     vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "-", function()
+  map("<leader>g-", function()
     if not M.state then return end
     M.state.interval = math.min(15000, M.state.interval + 500)
     if M.state.auto_mode then start_timer() end
     vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "m", function()
+  map("<leader>gm", function()
     if not M.state then return end
     M.state.auto_mode = not M.state.auto_mode
     if M.state.auto_mode then
@@ -351,16 +360,16 @@ function M._set_keymaps()
       vim.notify("[ghost-reader] manual ‖", vim.log.levels.INFO)
     end
     refresh_display()
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "q", function()
+  map("<leader>gq", function()
     M.stop()
     vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
-  end, opts)
+  end)
 
-  vim.keymap.set("n", "<Esc><Esc>", function()
+  map("<Esc><Esc>", function()
     M.hide()
-  end, opts)
+  end)
 end
 
 return M

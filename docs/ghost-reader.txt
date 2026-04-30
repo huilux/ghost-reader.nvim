@@ -6,14 +6,15 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 2. Setup                                           |ghost-reader-setup|
 3. Commands                                        |ghost-reader-commands|
 4. Configuration                                   |ghost-reader-config|
-5. Stealth Modes                                   |ghost-reader-modes|
+5. Reading Modes                                   |ghost-reader-modes|
+6. Keymaps                                         |ghost-reader-keymaps|
 
 ==============================================================================
 1. Introduction                                    |ghost-reader-intro|
 
 ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
-with three stealth modes that disguise book content as code. Features a
-boss key that instantly switches to realistic code.
+with stealth modes that disguise book content as code. Features a boss key
+that instantly switches back to your previous buffer.
 
 Requirements:
   - Neovim >= 0.10
@@ -25,49 +26,83 @@ Requirements:
 >lua
   -- lazy.nvim
   {
-    "your-name/ghost-reader.nvim",
-    cmd = "GhostReader",
+    "ghost-reader.nvim",
+    dir = "~/workspace/Tools/hidden-reading",
+    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderStatusline" },
+    keys = {
+      { "<leader>go", function() require("ghost-reader").select_book() end, desc = "Open/resume" },
+      { "<leader>gq", function() require("ghost-reader").close() end,       desc = "Quit" },
+      { "<leader>gt", function() require("ghost-reader").toc() end,         desc = "TOC" },
+    },
     opts = {},
   }
-<
-
->lua
-  -- Manual
-  require("ghost-reader").setup()
 <
 
 ==============================================================================
 3. Commands                                        |ghost-reader-commands|
 
-:GhostReader <path>    Open an ebook file
-:GhostReaderClose      Close current book
-:GhostReaderMode <m>   Switch mode: minimal_diff|code_camouflage|dual_mode
-:GhostReaderBoss       Activate boss mode (show fake code)
-:GhostReaderRestore    Restore reading mode
+:GhostReader [path]        Open an ebook (no arg shows book history)
+:GhostReaderClose          Close current book
+:GhostReaderStatusline     Open in statusline mode (bottom float win)
+:GhostReaderBoss           Activate boss key (switch to previous buffer)
+:GhostReaderRestore        Restore reading after boss key
 
 ==============================================================================
-4. Configuration                                   |ghost-reader-config|
+4. Configuration                                   |ghost-reader-config~
 
-See |ghost-reader.nvim| README for full configuration options.
-
-Default keymaps (all customizable via setup()):
-  J / <C-d>       Next page
-  K / <C-u>       Previous page
-  ]c              Next chapter
-  [c              Previous chapter
-  mb              Add bookmark
-  gb              List bookmarks
-  gt              Table of contents
-  gp              Show progress
-  <Esc><Esc>      Boss key
-  <leader>gr      Restore reading
-  <leader>gm      Switch stealth mode
+>lua
+  opts = {
+    boss_key = {
+      keys = "<leader>gb",
+      use_current_buffer = true,
+      preset = "random",
+    },
+    statusline = {
+      interval = 3000,   -- auto-advance interval in ms
+      mode = "auto",     -- "auto" or "manual"
+    },
+  }
+<
 
 ==============================================================================
-5. Stealth Modes                                   |ghost-reader-modes|
+5. Reading Modes                                   |ghost-reader-modes~
 
-minimal_diff       Content shown as-is with fake filetype and filename
-code_camouflage    Book text disguised as code (variables, comments, logs)
-dual_mode          Book text hidden inside multi-line comments/strings
+sparse_notes (fullscreen) ~
+  Book text is disguised as TODO/FIXME comments scattered throughout real
+  code (from your open buffers). Long lines wrap at 80 columns.
+
+statusline (bottom float window) ~
+  A 1-row floating window at the bottom shows one line at a time. Supports
+  auto-advance (configurable interval) and manual (J/K) modes. Long text
+  is split into screen-width chunks.
+
+==============================================================================
+6. Keymaps                                         |ghost-reader-keymaps~
+
+Global (available in any buffer):
+  <leader>go    Open book / resume reading (smart)
+  <leader>gq    Close fullscreen reader
+  <leader>gt    Table of contents
+
+Fullscreen mode (buffer-local):
+  J             Next page
+  K             Previous page
+  ]c            Next chapter
+  [c            Previous chapter
+  gp            Show progress
+  <leader>gt    Table of contents
+  <leader>gb    Boss key (switch to previous buffer)
+
+Statusline mode (buffer-local):
+  J             Next line/chunk
+  K             Previous line/chunk
+  <leader>g+    Speed up (-500ms)
+  <leader>g-    Slow down (+500ms)
+  <leader>gm    Toggle auto/manual
+  <leader>gq    Stop statusline reader
+  <leader>gb    Boss key (hide float window)
+
+Boss key recovery:
+  <leader>go    Restore reading from any state
 
  vim:tw=78:ts=8:ft=help:norl:

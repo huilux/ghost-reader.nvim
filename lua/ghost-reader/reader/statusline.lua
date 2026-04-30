@@ -320,34 +320,34 @@ end
 
 function M._set_keymaps()
   local leader = vim.g.mapleader or "\\"
-  local function map(key, action)
+  local function map(key, action, desc)
     local resolved = key:gsub("<leader>", leader)
-    vim.keymap.set("n", resolved, action, { buffer = 0, nowait = true, silent = true })
+    vim.keymap.set("n", resolved, action, { buffer = 0, nowait = true, silent = true, desc = desc })
   end
 
   map("J", function()
     advance()
     if M.state and M.state.auto_mode then start_timer() end
-  end)
+  end, "Ghost-reader 下一行")
 
   map("K", function()
     go_back()
     if M.state and M.state.auto_mode then start_timer() end
-  end)
+  end, "Ghost-reader 上一行")
 
   map("<leader>g+", function()
     if not M.state then return end
     M.state.interval = math.max(500, M.state.interval - 500)
     if M.state.auto_mode then start_timer() end
     vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
-  end)
+  end, "Ghost-reader 加速")
 
   map("<leader>g-", function()
     if not M.state then return end
     M.state.interval = math.min(15000, M.state.interval + 500)
     if M.state.auto_mode then start_timer() end
     vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
-  end)
+  end, "Ghost-reader 减速")
 
   map("<leader>gm", function()
     if not M.state then return end
@@ -360,16 +360,16 @@ function M._set_keymaps()
       vim.notify("[ghost-reader] manual ‖", vim.log.levels.INFO)
     end
     refresh_display()
-  end)
+  end, "Ghost-reader 切换自动/手动")
 
   map("<leader>gq", function()
     M.stop()
     vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
-  end)
+  end, "Ghost-reader 退出")
 
   map("<Esc><Esc>", function()
     M.hide()
-  end)
+  end, "Ghost-reader 老板键")
 end
 
 return M

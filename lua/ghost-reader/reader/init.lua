@@ -84,22 +84,22 @@ function M._render(state)
 end
 
 function M._set_keymaps(buf, keymaps)
-  local function map(key, action)
+  local function map(key, action, desc)
     if not key then return end
     local resolved = key:gsub("<leader>", vim.g.mapleader or "\\")
-    vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true })
+    vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true, desc = desc })
   end
 
-  map(keymaps.next_page, function() M.next_page() end)
-  map(keymaps.prev_page, function() M.prev_page() end)
-  map(keymaps.next_chapter, function() M.next_chapter() end)
-  map(keymaps.prev_chapter, function() M.prev_chapter() end)
+  map(keymaps.next_page, function() M.next_page() end, "Ghost-reader 下一页")
+  map(keymaps.prev_page, function() M.prev_page() end, "Ghost-reader 上一页")
+  map(keymaps.next_chapter, function() M.next_chapter() end, "Ghost-reader 下一章")
+  map(keymaps.prev_chapter, function() M.prev_chapter() end, "Ghost-reader 上一章")
   map(keymaps.boss_key, function()
     if M.state and vim.api.nvim_buf_is_valid(M.state.prev_buf) then
       progress.save(M.state.book, M.state, M.state.config)
       vim.api.nvim_set_current_buf(M.state.prev_buf)
     end
-  end)
+  end, "Ghost-reader 老板键")
 
   map(keymaps.toc, function()
     if not M.state then return end
@@ -110,11 +110,11 @@ function M._set_keymaps(buf, keymaps)
     vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
       if idx then M.go_to_chapter(idx) end
     end)
-  end)
+  end, "Ghost-reader 目录")
 
   map(keymaps.progress, function()
     if M.state then progress.show(M.state.book, M.state) end
-  end)
+  end, "Ghost-reader 进度")
 end
 
 function M.next_page()

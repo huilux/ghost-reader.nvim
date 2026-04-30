@@ -13,7 +13,7 @@ local defaults = {
     prev_chapter = "[c",
     bookmark_add = "mb",
     bookmark_list = "gb",
-    toc = "gt",
+    toc = "<leader>gt",
     progress = "gp",
     boss_key = "<Esc><Esc>",
   },

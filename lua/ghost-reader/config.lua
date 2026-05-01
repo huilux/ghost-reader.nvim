@@ -2,7 +2,7 @@ local M = {}
 
 local defaults = {
   boss_key = {
-    keys = "<leader>gb",
+    keys = "<Esc><Esc>",
     use_current_buffer = true,
     preset = "random",
   },
@@ -13,7 +13,7 @@ local defaults = {
     prev_chapter = "[c",
     toc = "<leader>gt",
     progress = "gp",
-    boss_key = "<leader>gb",
+    boss_key = "<Esc><Esc>",
   },
   statusline = {
     interval = 3000,

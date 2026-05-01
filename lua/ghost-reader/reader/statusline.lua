@@ -367,7 +367,7 @@ function M._set_keymaps()
     vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
   end, "Ghost-reader 退出")
 
-  map("<leader>gb", function()
+  map("<Esc><Esc>", function()
     M.hide()
   end, "Ghost-reader 老板键")
 end

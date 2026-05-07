@@ -367,7 +367,7 @@ reader.open(book, config)     创建 Buffer → 设置键映射 → 渲染内容
 renderer.render(lines)        将书籍文字伪装为代码注释
     │
     ▼
-用户阅读（J/K翻页）
+用户阅读（J/K内容跳转）
     │
     ▼
 navigate.next_page(state)     更新阅读位置 → 重新渲染

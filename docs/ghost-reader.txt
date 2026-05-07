@@ -28,7 +28,7 @@ Requirements:
   {
     "ghost-reader.nvim",
     dir = "~/workspace/Tools/hidden-reading",
-    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderStatusline" },
+    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderBoss", "GhostReaderRestore", "GhostReaderStatusline" },
     keys = {
       { "<leader>go", function() require("ghost-reader").select_book() end, desc = "Open/resume" },
       { "<leader>gq", function() require("ghost-reader").close() end,       desc = "Quit" },
@@ -53,7 +53,7 @@ Requirements:
 >lua
   opts = {
     boss_key = {
-      keys = "<leader>gb",
+      keys = "<Esc><Esc>",
       use_current_buffer = true,
       preset = "random",
     },
@@ -85,13 +85,13 @@ Global (available in any buffer):
   <leader>gt    Table of contents
 
 Fullscreen mode (buffer-local):
-  J             Next page
-  K             Previous page
+  J             Jump to next content line (auto page turn)
+  K             Jump to previous content line (auto page turn)
   ]c            Next chapter
   [c            Previous chapter
   gp            Show progress
   <leader>gt    Table of contents
-  <leader>gb    Boss key (switch to previous buffer)
+  <Esc><Esc>    Boss key (switch to previous buffer)
 
 Statusline mode (buffer-local):
   J             Next line/chunk
@@ -100,7 +100,7 @@ Statusline mode (buffer-local):
   <leader>g-    Slow down (+500ms)
   <leader>gm    Toggle auto/manual
   <leader>gq    Stop statusline reader
-  <leader>gb    Boss key (hide float window)
+  <Esc><Esc>    Boss key (hide float window)
 
 Boss key recovery:
   <leader>go    Restore reading from any state

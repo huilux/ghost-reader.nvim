@@ -89,7 +89,7 @@ function M.open(path, config)
 
   local book_name = vim.fn.fnamemodify(path, ":t:r")
   vim.notify(
-    string.format("[ghost-reader] %s · %d chapters\nJ/K=翻页 ]c/[c=章节 <Esc><Esc>=老板键",
+    string.format("[ghost-reader] %s · %d chapters\nJ/K=内容跳转 ]c/[c=章节 <Esc><Esc>=老板键",
       book_name, #book.chapters),
     vim.log.levels.INFO
   )
@@ -120,6 +120,9 @@ function M._render(state)
 
   -- 通过渲染器将书籍文字伪装为代码注释
   local rendered = renderer.render(raw_lines)
+
+  -- 记录内容行索引（用于 J/K 快速跳转）
+  state.content_indices = rendered.content_indices or {}
 
   -- [Neovim基础] nvim_buf_set_lines(buf, start, end, strict, lines) 替换 Buffer 行内容。
   -- 0, -1, false 表示替换从第 0 行到末尾的全部内容。
@@ -159,8 +162,8 @@ function M._set_keymaps(buf, keymaps)
     vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true, desc = desc })
   end
 
-  map(keymaps.next_page, function() M.next_page() end, "Ghost-reader 下一页")
-  map(keymaps.prev_page, function() M.prev_page() end, "Ghost-reader 上一页")
+  map(keymaps.next_page, function() M._jump_next_content() end, "Ghost-reader 下一个内容行")
+  map(keymaps.prev_page, function() M._jump_prev_content() end, "Ghost-reader 上一个内容行")
   map(keymaps.next_chapter, function() M.next_chapter() end, "Ghost-reader 下一章")
   map(keymaps.prev_chapter, function() M.prev_chapter() end, "Ghost-reader 上一章")
   -- 老板键：立即切换回之前的 Buffer（看起来就像在正常写代码）
@@ -189,6 +192,58 @@ function M._set_keymaps(buf, keymaps)
   map(keymaps.progress, function()
     if M.state then progress.show(M.state.book, M.state) end
   end, "Ghost-reader 进度")
+end
+
+-- 跳转到下一个内容行（sparse_notes 模式下 J 键的功能）
+-- 如果当前页没有更多内容行，自动翻到下一页并跳到第一个内容行
+function M._jump_next_content()
+  if not M.state then return end
+  local indices = M.state.content_indices
+  if not indices or #indices == 0 then
+    M.next_page()
+    return
+  end
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local current_line = cursor[1]
+  for _, idx in ipairs(indices) do
+    if idx > current_line then
+      vim.api.nvim_win_set_cursor(0, { idx, 0 })
+      vim.cmd("normal! zz")
+      return
+    end
+  end
+  -- 已到当前页最后一个内容行，翻到下一页
+  M.next_page()
+  if M.state and M.state.content_indices and #M.state.content_indices > 0 then
+    vim.api.nvim_win_set_cursor(0, { M.state.content_indices[1], 0 })
+    vim.cmd("normal! zz")
+  end
+end
+
+-- 跳转到上一个内容行（sparse_notes 模式下 K 键的功能）
+-- 如果当前页没有更多内容行，自动翻到上一页并跳到最后一个内容行
+function M._jump_prev_content()
+  if not M.state then return end
+  local indices = M.state.content_indices
+  if not indices or #indices == 0 then
+    M.prev_page()
+    return
+  end
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local current_line = cursor[1]
+  for i = #indices, 1, -1 do
+    if indices[i] < current_line then
+      vim.api.nvim_win_set_cursor(0, { indices[i], 0 })
+      vim.cmd("normal! zz")
+      return
+    end
+  end
+  -- 已到当前页第一个内容行，翻到上一页
+  M.prev_page()
+  if M.state and M.state.content_indices and #M.state.content_indices > 0 then
+    vim.api.nvim_win_set_cursor(0, { M.state.content_indices[#M.state.content_indices], 0 })
+    vim.cmd("normal! zz")
+  end
 end
 
 -- 以下是导航操作的封装：调用 navigate 模块更新状态，然后重新渲染

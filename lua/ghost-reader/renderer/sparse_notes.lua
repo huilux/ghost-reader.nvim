@@ -182,6 +182,7 @@ function M.render(book_lines, opts)
 
   -- 将骨架代码和书籍文字混合
   local result = {}
+  local content_indices = {}  -- 记录每个内容块首行在 result 中的 1-based 索引
   local book_cursor = 1           -- 当前处理到第几行书籍文字
   local insert_interval = math.random(5, 8)  -- 每隔多少行骨架代码插入一条书籍注释
   local line_count = 0
@@ -205,6 +206,8 @@ function M.render(book_lines, opts)
       -- 提取当前骨架行的缩进（让注释和骨架代码对齐）
       local indent = skel_line:match("^(%s+)") or ""
       local wrapped = wrap_comment(book_text, prefix, tag, indent, 80)
+      -- 记录内容块首行的 1-based 行号（#result + 1 即为即将插入的首行位置）
+      table.insert(content_indices, #result + 1)
       for _, wl in ipairs(wrapped) do
         table.insert(result, wl)
       end
@@ -219,6 +222,7 @@ function M.render(book_lines, opts)
     lines = result,        -- 渲染后的行数组
     filetype = ft,         -- 语法高亮用的文件类型
     fake_path = path or "source.py",  -- 假文件路径（显示在状态栏）
+    content_indices = content_indices, -- 内容块首行的行号列表
   }
 end
 

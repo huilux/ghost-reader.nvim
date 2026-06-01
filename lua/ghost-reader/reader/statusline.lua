@@ -305,6 +305,16 @@ function M.start(path, config)
       end
     end,
   })
+  -- 退出前保存阅读进度
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = M._augroup,
+    callback = function()
+      if M.state then
+        local fake_book = { path = M.state.book.path, chapters = M.state.book.chapters }
+        progress.save(fake_book, M.state, M.state.config)
+      end
+    end,
+  })
 
   -- 开始显示第一行
   advance_line()
@@ -318,6 +328,8 @@ function M.start(path, config)
   -- 设置键映射
   M._set_keymaps()
 
+  local name = vim.fn.fnamemodify(path, ":t:r")
+  local mode_label = auto_mode and "自动" or "手动"
   utils.notify(string.format("%s · 状态栏%s模式\nJ/K=翻行 +/-=调速 m=切换模式 q=退出",
     name, mode_label))
 end

@@ -33,6 +33,9 @@ M.page_size = 40
 
 -- 打开一本书进入全屏阅读模式
 function M.open(path, config)
+  -- 如果已在阅读模式中，先清理旧状态
+  if M.state then M.close() end
+
   local book, err = bookshelf.open(path)
   if err then
     utils.notify(err, vim.log.levels.ERROR)
@@ -87,6 +90,7 @@ function M.open(path, config)
   -- 设置 Buffer 局部键映射
   M._set_keymaps(buf, config.keymaps)
 
+  local book_name = vim.fn.fnamemodify(path, ":t:r")
   utils.notify(string.format("%s · %d chapters\nJ/K=内容跳转 ]c/[c=章节 <Esc><Esc>=老板键",
     book_name, #book.chapters))
   -- [Neovim基础] 自动命令（Autocmd）：在特定事件发生时自动执行回调。
@@ -100,6 +104,17 @@ function M.open(path, config)
     callback = function()
       if M.state then
         progress.save(M.state.book, M.state, M.state.config)
+      end
+    end,
+  })
+  -- 退出前恢复原始 buffer，确保 shada/session 捕获正确状态
+  M._quit_augroup = vim.api.nvim_create_augroup("ghost-reader-quit-guard", { clear = true })
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = M._quit_augroup,
+    callback = function()
+      if M.state and vim.api.nvim_buf_is_valid(M.state.prev_buf) then
+        progress.save(M.state.book, M.state, M.state.config)
+        vim.api.nvim_set_current_buf(M.state.prev_buf)
       end
     end,
   })
@@ -262,6 +277,10 @@ function M.close()
     utils.safe_delete_buf(M.state.buf)
   end
   bookshelf.close()
+  if M._quit_augroup then
+    vim.api.nvim_del_augroup_by_name("ghost-reader-quit-guard")
+    M._quit_augroup = nil
+  end
   M.state = nil
 end
 

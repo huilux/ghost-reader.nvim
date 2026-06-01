@@ -27,7 +27,7 @@ Requirements:
   -- lazy.nvim
   {
     "ghost-reader.nvim",
-    dir = "~/workspace/Tools/hidden-reading",
+    dir = "~/workspace/Tools/ghost-reader.nvim",
     cmd = { "GhostReader", "GhostReaderClose", "GhostReaderBoss", "GhostReaderRestore", "GhostReaderStatusline" },
     keys = {
       { "<leader>go", function() require("ghost-reader").select_book() end, desc = "Open/resume" },

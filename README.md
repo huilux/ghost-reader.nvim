@@ -71,7 +71,7 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 -- lazy.nvim
 return {
   'ghost-reader.nvim',
-  dir = '~/workspace/Tools/hidden-reading',
+  dir = '~/workspace/Tools/ghost-reader.nvim',
   cmd = { 'GhostReader', 'GhostReaderClose', 'GhostReaderBoss', 'GhostReaderRestore', 'GhostReaderStatusline' },
   keys = {
     { '<leader>go', function() require('ghost-reader').select_book() end, desc = '打开/恢复阅读' },

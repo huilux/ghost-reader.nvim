@@ -26,8 +26,7 @@ Requirements:
 >lua
   -- lazy.nvim
   {
-    "ghost-reader.nvim",
-    dir = "~/workspace/Tools/ghost-reader.nvim",
+    "huilux/ghost-reader.nvim",
     cmd = { "GhostReader", "GhostReaderClose", "GhostReaderBoss", "GhostReaderRestore", "GhostReaderStatusline" },
     keys = {
       { "<leader>go", function() require("ghost-reader").select_book() end, desc = "Open/resume" },

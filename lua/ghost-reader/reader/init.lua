@@ -35,7 +35,7 @@ M.page_size = 40
 function M.open(path, config)
   local book, err = bookshelf.open(path)
   if err then
-    vim.notify("[ghost-reader] " .. err, vim.log.levels.ERROR)
+    utils.notify(err, vim.log.levels.ERROR)
     return false
   end
 
@@ -87,12 +87,8 @@ function M.open(path, config)
   -- 设置 Buffer 局部键映射
   M._set_keymaps(buf, config.keymaps)
 
-  local book_name = vim.fn.fnamemodify(path, ":t:r")
-  vim.notify(
-    string.format("[ghost-reader] %s · %d chapters\nJ/K=内容跳转 ]c/[c=章节 <Esc><Esc>=老板键",
-      book_name, #book.chapters),
-    vim.log.levels.INFO
-  )
+  utils.notify(string.format("%s · %d chapters\nJ/K=内容跳转 ]c/[c=章节 <Esc><Esc>=老板键",
+    book_name, #book.chapters))
   -- [Neovim基础] 自动命令（Autocmd）：在特定事件发生时自动执行回调。
   -- 这里注册了两个事件监听：
   --   BufUnload: Buffer 被卸载时（用户关闭或切换）保存进度
@@ -146,28 +142,14 @@ end
 
 -- 设置 Buffer 局部键映射
 function M._set_keymaps(buf, keymaps)
-  -- 辅助函数：将 <leader> 占位符替换为实际的 Leader 键值
-  local function map(key, action, desc)
-    if not key then return end
-    -- [Neovim基础] vim.g.mapleader 是用户设置的 Leader 键（如空格、逗号等）。
-    -- 如果用户没设置，默认是反斜杠 \。
-    local resolved = key:gsub("<leader>", vim.g.mapleader or "\\")
-    -- [Neovim基础] vim.keymap.set(mode, lhs, rhs, opts) 创建键映射。
-    -- mode: "n" = Normal 模式
-    -- { buffer = buf }: Buffer 局部映射，只在这个 Buffer 中生效。
-    --   当 Buffer 被删除时，映射自动清理，不会影响其他 Buffer。
-    -- nowait = true: 不等待更长的映射序列（避免按键延迟）
-    -- silent = true: 执行时不显示命令行消息
-    -- desc: 描述文本（在 which-key 等插件中显示）
-    vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true, desc = desc })
-  end
-
-  map(keymaps.next_page, function() M._jump_next_content() end, "Ghost-reader 下一个内容行")
-  map(keymaps.prev_page, function() M._jump_prev_content() end, "Ghost-reader 上一个内容行")
-  map(keymaps.next_chapter, function() M.next_chapter() end, "Ghost-reader 下一章")
-  map(keymaps.prev_chapter, function() M.prev_chapter() end, "Ghost-reader 上一章")
+  -- [Neovim基础] vim.keymap.set(mode, lhs, rhs, opts) 创建键映射。
+  -- 回忆 utils.buf_map：自动解析 <leader>、nil 检查、设置 buffer/silent/nowait。
+  utils.buf_map(buf, keymaps.next_page, function() M._jump_content(1) end, "Ghost-reader 下一个内容行")
+  utils.buf_map(buf, keymaps.prev_page, function() M._jump_content(-1) end, "Ghost-reader 上一个内容行")
+  utils.buf_map(buf, keymaps.next_chapter, function() M.next_chapter() end, "Ghost-reader 下一章")
+  utils.buf_map(buf, keymaps.prev_chapter, function() M.prev_chapter() end, "Ghost-reader 上一章")
   -- 老板键：立即切换回之前的 Buffer（看起来就像在正常写代码）
-  map(keymaps.boss_key, function()
+  utils.buf_map(buf, keymaps.boss_key, function()
     if M.state and vim.api.nvim_buf_is_valid(M.state.prev_buf) then
       progress.save(M.state.book, M.state, M.state.config)
       vim.api.nvim_set_current_buf(M.state.prev_buf)
@@ -175,7 +157,7 @@ function M._set_keymaps(buf, keymaps)
   end, "Ghost-reader 老板键")
 
   -- 目录选择
-  map(keymaps.toc, function()
+  utils.buf_map(buf, keymaps.toc, function()
     if not M.state then return end
     local items = {}
     for _, entry in ipairs(M.state.book.toc) do
@@ -189,60 +171,48 @@ function M._set_keymaps(buf, keymaps)
     end)
   end, "Ghost-reader 目录")
 
-  map(keymaps.progress, function()
+  utils.buf_map(buf, keymaps.progress, function()
     if M.state then progress.show(M.state.book, M.state) end
   end, "Ghost-reader 进度")
 end
 
--- 跳转到下一个内容行（sparse_notes 模式下 J 键的功能）
--- 如果当前页没有更多内容行，自动翻到下一页并跳到第一个内容行
-function M._jump_next_content()
+-- 跳转到下一个/上一个内容行（sparse_notes 模式下 J/K 键的功能）
+-- 如果当前页没有更多内容行，自动翻页并跳到目标内容行
+-- direction: 1 = 下一个, -1 = 上一个
+function M._jump_content(direction)
   if not M.state then return end
   local indices = M.state.content_indices
   if not indices or #indices == 0 then
-    M.next_page()
+    if direction > 0 then M.next_page() else M.prev_page() end
     return
   end
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local current_line = cursor[1]
-  for _, idx in ipairs(indices) do
-    if idx > current_line then
-      vim.api.nvim_win_set_cursor(0, { idx, 0 })
-      vim.cmd("normal! zz")
-      return
-    end
-  end
-  -- 已到当前页最后一个内容行，翻到下一页
-  M.next_page()
-  if M.state and M.state.content_indices and #M.state.content_indices > 0 then
-    vim.api.nvim_win_set_cursor(0, { M.state.content_indices[1], 0 })
-    vim.cmd("normal! zz")
-  end
-end
+  local current_line = vim.api.nvim_win_get_cursor(0)[1]
 
--- 跳转到上一个内容行（sparse_notes 模式下 K 键的功能）
--- 如果当前页没有更多内容行，自动翻到上一页并跳到最后一个内容行
-function M._jump_prev_content()
-  if not M.state then return end
-  local indices = M.state.content_indices
-  if not indices or #indices == 0 then
-    M.prev_page()
-    return
-  end
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local current_line = cursor[1]
-  for i = #indices, 1, -1 do
-    if indices[i] < current_line then
-      vim.api.nvim_win_set_cursor(0, { indices[i], 0 })
-      vim.cmd("normal! zz")
-      return
+  local target
+  if direction > 0 then
+    for _, idx in ipairs(indices) do
+      if idx > current_line then
+        target = idx; break
+      end
+    end
+  else
+    for i = #indices, 1, -1 do
+      if indices[i] < current_line then
+        target = indices[i]; break
+      end
     end
   end
-  -- 已到当前页第一个内容行，翻到上一页
-  M.prev_page()
+
+  if target then
+    utils.cursor_jump(target)
+    return
+  end
+
+  -- 已到当前页边界，翻页后跳到目标页的首/末内容行
+  if direction > 0 then M.next_page() else M.prev_page() end
   if M.state and M.state.content_indices and #M.state.content_indices > 0 then
-    vim.api.nvim_win_set_cursor(0, { M.state.content_indices[#M.state.content_indices], 0 })
-    vim.cmd("normal! zz")
+    local fallback = direction > 0 and M.state.content_indices[1] or M.state.content_indices[#M.state.content_indices]
+    utils.cursor_jump(fallback)
   end
 end
 
@@ -286,10 +256,10 @@ end
 
 -- 关闭阅读模式，清理资源
 function M.close()
-  if M.state and vim.api.nvim_buf_is_valid(M.state.buf) then
+  if M.state then
     -- [Neovim API] nvim_buf_delete(buf, { force = true }) 强制删除 Buffer。
-    -- force = true 即使 Buffer 有未保存的修改也会删除。
-    vim.api.nvim_buf_delete(M.state.buf, { force = true })
+    -- 回忆：utils.safe_delete_buf 自动检查 Buffer 有效性。
+    utils.safe_delete_buf(M.state.buf)
   end
   bookshelf.close()
   M.state = nil

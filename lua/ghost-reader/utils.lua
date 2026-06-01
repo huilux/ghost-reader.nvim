@@ -48,10 +48,14 @@ function M.detect_format(path)
   -- [Lua概念] :lower() 是字符串方法，将字符串转为小写。
   -- 冒号语法 str:lower() 等价于 string.lower(str)
   if ext then ext = ext:lower() end
-  if ext == "epub" then return "epub"
-  elseif ext == "md" or ext == "markdown" then return "markdown"
-  elseif ext == "txt" or ext == "text" then return "txt"
-  else return nil
+  if ext == "epub" then
+    return "epub"
+  elseif ext == "md" or ext == "markdown" then
+    return "markdown"
+  elseif ext == "txt" or ext == "text" then
+    return "txt"
+  else
+    return nil
   end
 end
 
@@ -80,6 +84,63 @@ end
 function M.command_exists(cmd)
   -- vim.fn.executable 检查系统命令是否可用，返回 0 或 1
   return vim.fn.executable(cmd) == 1
+end
+
+-- UTF-8 逐字符迭代器
+-- [Lua概念] UTF-8 是变长编码，每个字符占 1-4 字节。
+-- 通过第一个字节判断该字符占几个字节：
+--   < 0x80 (128)     → 1 字节（ASCII 字符）
+--   < 0xE0 (224)     → 2 字节
+--   < 0xF0 (240)     → 3 字节（大部分中文字符）
+--   >= 0xF0          → 4 字节（emoji 等）
+-- [Lua概念] s:byte(i) 获取字符串第 i 个字节的数值（0-255）。
+-- [Lua概念] s:sub(i, j) 截取子串（1-based，包含两端）。
+function M.utf8_next(s, i)
+  if i > #s then return nil end
+  local b = s:byte(i)
+  local len
+  if b < 0x80 then
+    len = 1
+  elseif b < 0xE0 then
+    len = 2
+  elseif b < 0xF0 then
+    len = 3
+  else
+    len = 4
+  end
+  return s:sub(i, i + len - 1), i + len
+end
+
+-- 将光标跳转到指定行并居中显示
+function M.cursor_jump(line)
+  vim.api.nvim_win_set_cursor(0, { line, 0 })
+  vim.cmd("normal! zz")
+end
+
+-- 在指定 Buffer 中创建 Buffer 局部键映射（自动解析 <leader>）
+function M.buf_map(buf, key, action, desc)
+  if not key then return end
+  local resolved = key:gsub("<leader>", vim.g.mapleader or "\\")
+  vim.keymap.set("n", resolved, action, { buffer = buf, nowait = true, silent = true, desc = desc })
+end
+
+-- 安全关闭窗口（自动检查有效性）
+function M.safe_close_win(win)
+  if win and vim.api.nvim_win_is_valid(win) then
+    vim.api.nvim_win_close(win, true)
+  end
+end
+
+-- 安全删除 Buffer（自动检查有效性）
+function M.safe_delete_buf(buf)
+  if buf and vim.api.nvim_buf_is_valid(buf) then
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end
+end
+
+-- 插件通知（自动添加前缀，level 默认 INFO）
+function M.notify(msg, level)
+  vim.notify("[ghost-reader] " .. msg, level or vim.log.levels.INFO)
 end
 
 -- [Lua概念] 模块文件必须在最后一行 return M，

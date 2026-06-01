@@ -25,33 +25,22 @@
 ]]
 
 local M = {}
+local utils = require("ghost-reader.utils")
 local bookshelf = require("ghost-reader.bookshelf")
 local progress = require("ghost-reader.reader.progress")
 local history = require("ghost-reader.history")
 
 -- 模块级状态
-M.state = nil          -- 当前阅读状态
-M.timer = nil          -- 自动翻行定时器
-M.chunks = {}          -- 当前行的文本分块（超长行会被拆分为多个分块）
-M.chunk_idx = 0        -- 当前显示的分块索引
-M._buf = nil           -- 浮动窗口使用的 Buffer
-M._win = nil           -- 浮动窗口的 Window ID
-M._augroup = nil       -- 自动命令分组
-M._hidden = false      -- 是否处于隐藏状态（老板键触发时）
+M.state = nil     -- 当前阅读状态
+M.timer = nil     -- 自动翻行定时器
+M.chunks = {}     -- 当前行的文本分块（超长行会被拆分为多个分块）
+M.chunk_idx = 0   -- 当前显示的分块索引
+M._buf = nil      -- 浮动窗口使用的 Buffer
+M._win = nil      -- 浮动窗口的 Window ID
+M._augroup = nil  -- 自动命令分组
+M._hidden = false -- 是否处于隐藏状态（老板键触发时）
 
--- UTF-8 逐字符迭代器（与 sparse_notes.lua 中的实现相同）
--- 回忆：UTF-8 编码中，第一个字节决定了该字符占几个字节。
-local function utf8_next(s, i)
-  if i > #s then return nil end
-  local b = s:byte(i)
-  local len
-  if b < 0x80 then len = 1
-  elseif b < 0xE0 then len = 2
-  elseif b < 0xF0 then len = 3
-  else len = 4
-  end
-  return s:sub(i, i + len - 1), i + len
-end
+-- UTF-8 逐字符迭代器（提取到 utils.utf8_next，回忆 sparse_notes.lua 中的详细说明）
 
 -- 获取单个字符的显示宽度
 local function char_width(ch)
@@ -71,7 +60,7 @@ local function split_to_chunks(text, max_width)
 
   while i <= #text do
     local ch
-    ch, i = utf8_next(text, i)
+    ch, i = utils.utf8_next(text, i)
     local cw = char_width(ch)
 
     -- 累加宽度超过最大宽度时，当前分块结束，开始新分块
@@ -108,12 +97,8 @@ end
 -- 创建底部的浮动窗口
 local function create_float_win()
   -- 如果之前有窗口/Buffer 存在，先清理
-  if M._win and vim.api.nvim_win_is_valid(M._win) then
-    vim.api.nvim_win_close(M._win, true)
-  end
-  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
-    vim.api.nvim_buf_delete(M._buf, { force = true })
-  end
+  utils.safe_close_win(M._win)
+  utils.safe_delete_buf(M._buf)
 
   -- [Neovim基础] 创建新的 Buffer 和浮动窗口。
   -- Buffer: listed=false（不在 :ls 中显示），scratch=true（临时）
@@ -125,9 +110,9 @@ local function create_float_win()
   vim.bo[M._buf].bufhidden = "wipe"
 
   -- 计算浮动窗口的位置：放在编辑器底部（状态栏上方）
-  local total_w = vim.o.columns       -- 编辑器总宽度
-  local total_h = vim.o.lines         -- 编辑器总高度
-  local row = total_h - 3             -- 底部第 3 行（状态栏上方）
+  local total_w = vim.o.columns -- 编辑器总宽度
+  local total_h = vim.o.lines   -- 编辑器总高度
+  local row = total_h - 3       -- 底部第 3 行（状态栏上方）
 
   -- [Neovim基础] nvim_open_win(buf, enter, config) 创建浮动窗口。
   -- buf: 要在窗口中显示的 Buffer
@@ -257,7 +242,7 @@ local function start_timer()
   M.timer = vim.fn.timer_start(M.state.interval, function()
     if M.state and M.state.auto_mode then
       advance()
-      start_timer()  -- 递归调用，实现周期执行
+      start_timer() -- 递归调用，实现周期执行
     end
   end)
 end
@@ -269,7 +254,7 @@ function M.start(path, config)
 
   local book, err = bookshelf.open(path)
   if err then
-    vim.notify("[ghost-reader] " .. err, vim.log.levels.ERROR)
+    utils.notify(err, vim.log.levels.ERROR)
     return
   end
 
@@ -333,13 +318,8 @@ function M.start(path, config)
   -- 设置键映射
   M._set_keymaps()
 
-  local name = vim.fn.fnamemodify(path, ":t:r")
-  local mode_label = auto_mode and "自动" or "手动"
-  vim.notify(
-    string.format("[ghost-reader] %s · 状态栏%s模式\nJ/K=翻行 +/-=调速 m=切换模式 q=退出",
-      name, mode_label),
-    vim.log.levels.INFO
-  )
+  utils.notify(string.format("%s · 状态栏%s模式\nJ/K=翻行 +/-=调速 m=切换模式 q=退出",
+    name, mode_label))
 end
 
 -- 停止状态栏阅读模式，清理所有资源
@@ -356,14 +336,10 @@ function M.stop()
     M._augroup = nil
   end
   -- 关闭浮动窗口
-  if M._win and vim.api.nvim_win_is_valid(M._win) then
-    vim.api.nvim_win_close(M._win, true)
-  end
+  utils.safe_close_win(M._win)
   M._win = nil
   -- 删除 Buffer
-  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
-    vim.api.nvim_buf_delete(M._buf, { force = true })
-  end
+  utils.safe_delete_buf(M._buf)
   M._buf = nil
   -- 保存阅读进度
   if M.state then
@@ -398,14 +374,10 @@ function M.hide()
     M.timer = nil
   end
   -- 关闭窗口和 Buffer
-  if M._win and vim.api.nvim_win_is_valid(M._win) then
-    vim.api.nvim_win_close(M._win, true)
-    M._win = nil
-  end
-  if M._buf and vim.api.nvim_buf_is_valid(M._buf) then
-    vim.api.nvim_buf_delete(M._buf, { force = true })
-    M._buf = nil
-  end
+  utils.safe_close_win(M._win)
+  M._win = nil
+  utils.safe_delete_buf(M._buf)
+  M._buf = nil
 end
 
 -- 恢复隐藏的浮动窗口
@@ -421,66 +393,59 @@ end
 
 -- 设置状态栏模式的键映射
 function M._set_keymaps()
-  local leader = vim.g.mapleader or "\\"
-  local function map(key, action, desc)
-    local resolved = key:gsub("<leader>", leader)
-    -- [Neovim基础] { buffer = 0 } 表示"当前 Buffer"的局部映射。
-    -- 与 reader/init.lua 中 { buffer = buf } 指定具体编号不同，
-    -- 0 代表"当前 Buffer"。
-    vim.keymap.set("n", resolved, action, { buffer = 0, nowait = true, silent = true, desc = desc })
-  end
-
-  -- J: 前进一行/一个分块
-  map("J", function()
+  -- [Neovim基础] { buffer = 0 } 表示"当前 Buffer"的局部映射。
+  -- 回忆 utils.buf_map：自动解析 <leader>、nil 检查、设置 buffer/silent/nowait。
+  utils.buf_map(0, "J", function()
     advance()
     -- 手动操作后重启定时器（重置倒计时）
     if M.state and M.state.auto_mode then start_timer() end
   end, "Ghost-reader 下一行")
 
-  -- K: 后退一行/一个分块
-  map("K", function()
+  utils.buf_map(0, "K", function()
     go_back()
     if M.state and M.state.auto_mode then start_timer() end
   end, "Ghost-reader 上一行")
 
   -- <leader>g+: 加速（缩短间隔）
-  map("<leader>g+", function()
+  utils.buf_map(0, "<leader>g+", function()
     if not M.state then return end
     M.state.interval = math.max(500, M.state.interval - 500)
     if M.state.auto_mode then start_timer() end
-    vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
+    utils.notify(M.state.interval .. "ms")
   end, "Ghost-reader 加速")
 
   -- <leader>g-: 减速（增加间隔）
-  map("<leader>g-", function()
+  utils.buf_map(0, "<leader>g-", function()
     if not M.state then return end
     M.state.interval = math.min(15000, M.state.interval + 500)
     if M.state.auto_mode then start_timer() end
-    vim.notify("[ghost-reader] " .. M.state.interval .. "ms", vim.log.levels.INFO)
+    utils.notify(M.state.interval .. "ms")
   end, "Ghost-reader 减速")
 
   -- <leader>gm: 切换自动/手动模式
-  map("<leader>gm", function()
+  utils.buf_map(0, "<leader>gm", function()
     if not M.state then return end
     M.state.auto_mode = not M.state.auto_mode
     if M.state.auto_mode then
       start_timer()
-      vim.notify("[ghost-reader] auto ▶", vim.log.levels.INFO)
+      utils.notify("auto ▶")
     else
-      if M.timer then vim.fn.timer_stop(M.timer); M.timer = nil end
-      vim.notify("[ghost-reader] manual ‖", vim.log.levels.INFO)
+      if M.timer then
+        vim.fn.timer_stop(M.timer); M.timer = nil
+      end
+      utils.notify("manual ‖")
     end
     refresh_display()
   end, "Ghost-reader 切换自动/手动")
 
   -- <leader>gq: 退出状态栏模式
-  map("<leader>gq", function()
+  utils.buf_map(0, "<leader>gq", function()
     M.stop()
-    vim.notify("[ghost-reader] stopped", vim.log.levels.INFO)
+    utils.notify("stopped")
   end, "Ghost-reader 退出")
 
   -- <Esc><Esc>: 老板键（隐藏浮动窗口）
-  map("<Esc><Esc>", function()
+  utils.buf_map(0, "<Esc><Esc>", function()
     M.hide()
   end, "Ghost-reader 老板键")
 end

@@ -15,6 +15,7 @@
 ]]
 
 local M = {}
+local utils = require("ghost-reader.utils")
 
 -- 不同文件类型的注释语法
 local comment_prefixes = {
@@ -42,28 +43,6 @@ local comment_prefixes = {
 -- 注释中使用的标签（让伪装更逼真）
 local tags = { "TODO", "FIXME", "NOTE", "HACK", "XXX", "REFACTOR", "OPTIMIZE", "REVIEW" }
 
--- UTF-8 字符解码：获取字符串中指定位置的一个完整字符
--- [Lua概念] UTF-8 是变长编码，每个字符占 1-4 字节。
--- 通过第一个字节判断该字符占几个字节：
---   < 0x80 (128)     → 1 字节（ASCII 字符）
---   < 0xE0 (224)     → 2 字节
---   < 0xF0 (240)     → 3 字节（大部分中文字符）
---   >= 0xF0          → 4 字节（emoji 等）
--- [Lua概念] s:byte(i) 获取字符串第 i 个字节的数值（0-255）。
--- [Lua概念] s:sub(i, j) 截取子串（1-based，包含两端）。
-local function utf8_next(s, i)
-  if i > #s then return nil end
-  local b = s:byte(i)
-  local len
-  if b < 0x80 then len = 1
-  elseif b < 0xE0 then len = 2
-  elseif b < 0xF0 then len = 3
-  else len = 4
-  end
-  -- 返回：当前字符, 下一个字符的起始位置
-  return s:sub(i, i + len - 1), i + len
-end
-
 -- 将一行书籍文字包装为注释
 local function wrap_comment(text, prefix, tag, indent, max_width)
   -- 构建注释头：缩进 + 注释前缀 + 标签 + ": "
@@ -89,7 +68,7 @@ local function wrap_comment(text, prefix, tag, indent, max_width)
   local first = true
 
   while i <= #text do
-    local ch, next_i = utf8_next(text, i)
+    local ch, next_i = utils.utf8_next(text, i)
     local cw = vim.fn.strwidth(ch)
     if cur_w + cw > max_width then
       table.insert(lines, cur)
@@ -182,9 +161,9 @@ function M.render(book_lines, opts)
 
   -- 将骨架代码和书籍文字混合
   local result = {}
-  local content_indices = {}  -- 记录每个内容块首行在 result 中的 1-based 索引
-  local book_cursor = 1           -- 当前处理到第几行书籍文字
-  local insert_interval = math.random(5, 8)  -- 每隔多少行骨架代码插入一条书籍注释
+  local content_indices = {}                -- 记录每个内容块首行在 result 中的 1-based 索引
+  local book_cursor = 1                     -- 当前处理到第几行书籍文字
+  local insert_interval = math.random(5, 8) -- 每隔多少行骨架代码插入一条书籍注释
   local line_count = 0
   local tag_idx = math.random(1, #tags)
   local skel_idx = 1
@@ -219,9 +198,9 @@ function M.render(book_lines, opts)
   end
 
   return {
-    lines = result,        -- 渲染后的行数组
-    filetype = ft,         -- 语法高亮用的文件类型
-    fake_path = path or "source.py",  -- 假文件路径（显示在状态栏）
+    lines = result,                    -- 渲染后的行数组
+    filetype = ft,                     -- 语法高亮用的文件类型
+    fake_path = path or "source.py",   -- 假文件路径（显示在状态栏）
     content_indices = content_indices, -- 内容块首行的行号列表
   }
 end

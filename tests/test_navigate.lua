@@ -56,7 +56,14 @@ describe("navigate", function()
     local pos = { chapter_index = 1, line_index = 1, segment_index = 1 }
     local next_pos = navigate.next_page(book, pos, 3, segments)
 
-    assert.same({ chapter_index = 1, line_index = 2, segment_index = 1 }, next_pos)
+    assert.same({ chapter_index = 2, line_index = 1, segment_index = 1 }, next_pos)
+  end)
+
+  it("moves one unit for a one-step page batch", function()
+    local pos = { chapter_index = 1, line_index = 1, segment_index = 1 }
+    local next_pos = navigate.next_page(book, pos, 1, segments)
+
+    assert.same({ chapter_index = 1, line_index = 1, segment_index = 2 }, next_pos)
   end)
 
   it("resets line and segment on chapter jump", function()

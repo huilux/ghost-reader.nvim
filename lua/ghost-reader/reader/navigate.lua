@@ -116,7 +116,7 @@ end
 function M.next_page(book, position, step, segment_count)
   local pos = copy(M.normalize(book, position, segment_count))
   local moved = false
-  for _ = 1, math.max(0, (tonumber(step) or 0) - 1) do
+  for _ = 1, math.max(0, tonumber(step) or 0) do
     local next_pos, did_move = M.next_content(book, pos, segment_count)
     pos = next_pos
     moved = moved or did_move
@@ -130,7 +130,7 @@ end
 function M.prev_page(book, position, step, segment_count)
   local pos = copy(M.normalize(book, position, segment_count))
   local moved = false
-  for _ = 1, math.max(0, (tonumber(step) or 0) - 1) do
+  for _ = 1, math.max(0, tonumber(step) or 0) do
     local prev_pos, did_move = M.prev_content(book, pos, segment_count)
     pos = prev_pos
     moved = moved or did_move

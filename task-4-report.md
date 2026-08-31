@@ -19,3 +19,6 @@ Verification:
 
 Result:
 - All tests passed.
+
+Fix note:
+- Corrected `next_page` and `prev_page` to apply exactly `step` content movements, and added a `step=1` navigation test alongside the sample `step=3` case.

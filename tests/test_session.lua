@@ -115,6 +115,55 @@ describe("session", function()
     assert.is_nil(session.get())
   end)
 
+  it("keeps the active session when the first render fails during replacement", function()
+    local render_calls = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        return {
+          start = function() return true end,
+          render = function()
+            render_calls = render_calls + 1
+            return render_calls == 1
+          end,
+          hide = function() return true end,
+          restore = function() return true end,
+          stop = function() return true end,
+          page_size = function() return 1 end,
+          segment_count = function() return 1 end,
+          segment_text = function(_, text) return text end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local first = vim.fn.tempname() .. ".txt"
+    local second = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "alpha" }, first)
+    vim.fn.writefile({ "beta" }, second)
+
+    session.configure(cfg)
+    assert.is_true(session.start(first, "overlay"))
+    local before = session.get()
+    assert.is_false(session.start(second, "overlay"))
+    assert.equal(before, session.get())
+    assert.equal(before.generation, session.get().generation)
+    assert.is_true(render_calls > 0)
+    session.stop()
+  end)
+
   it("records history only after a successful start", function()
     local history_calls = {}
     package.loaded["ghost-reader.history"] = {

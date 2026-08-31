@@ -111,6 +111,12 @@ local function save_progress()
   end
 end
 
+local function stop_renderer(session)
+  if session and session.renderer and session.renderer.stop then
+    pcall(session.renderer.stop, session.ctx)
+  end
+end
+
 local function setup_autocmds()
   if active.autocmd_group then
     pcall(vim.api.nvim_del_augroup_by_id, active.autocmd_group)
@@ -192,14 +198,7 @@ local function open_book(path, mode)
     return false
   end
 
-  if previous then
-    local previous_state = active
-    active = previous
-    M.stop()
-    active = previous_state
-  end
-
-  set_state({
+  local tentative = {
     lifecycle = "ACTIVE",
     visibility = "VISIBLE",
     controls = requested_mode == "statusline" and "INACTIVE" or "ACTIVE",
@@ -213,14 +212,29 @@ local function open_book(path, mode)
     control_buf = control_buf,
     control_win = control_win,
     generation = state.generation + 1,
-  })
+  }
 
   local saved = progress.load(book, cfg)
   if saved and saved.position then
-    active.position = navigate.normalize(book, saved.position, segment_count)
+    tentative.position = navigate.normalize(book, saved.position, segment_count)
   end
+  active = tentative
+  local ok, rendered = pcall(render_current)
+  if not ok or rendered == false then
+    stop_renderer(tentative)
+    active = previous
+    return false
+  end
+
+  if previous then
+    local previous_state = active
+    active = previous
+    M.stop()
+    active = previous_state
+  end
+
+  set_state(tentative)
   setup_autocmds()
-  render_current()
   history.record(book.path, cfg)
   if active.controls == "ACTIVE" then
     keymaps.enter_controls(active, cfg)

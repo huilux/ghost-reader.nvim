@@ -20,6 +20,7 @@ local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local session = require("ghost-reader.session")
+local history = require("ghost-reader.history")
 
 -- [Lua概念] M.config = nil 表示"尚未初始化"。
 -- 第一次调用 M.setup() 时才会被赋值。

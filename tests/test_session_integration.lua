@@ -64,7 +64,7 @@ describe("session integration", function()
           },
           toc = {
             { title = "One", index = 1 },
-            { title = "Two", index = 2 },
+            { title = "Two", index = 1 },
           },
         }
       end,
@@ -93,6 +93,7 @@ describe("session integration", function()
   end)
 
   it("uses toc indices rather than picker ordinals", function()
+    local selected = nil
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)
         return {
@@ -104,11 +105,15 @@ describe("session integration", function()
           },
           toc = {
             { title = "One", index = 1 },
-            { title = "Two", index = 2 },
+            { title = "Two", index = 1 },
           },
         }
       end,
     }
+    vim.ui.select = function(items, _, on_choice)
+      selected = items
+      on_choice(items[2], 2)
+    end
 
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
@@ -119,6 +124,9 @@ describe("session integration", function()
     vim.fn.writefile({ "placeholder" }, book_path)
     session.configure(cfg)
     assert.is_true(session.start(book_path, "overlay"))
+    session.toc()
+    assert.is_not_nil(selected)
+    assert.equal(1, session.get().position.chapter_index)
     session.stop()
   end)
 
@@ -196,6 +204,8 @@ describe("session integration", function()
     session.configure(cfg)
     assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
     vim.api.nvim_exec_autocmds("BufLeave", { buffer = second })
+    assert.equal("VISIBLE", session.get().visibility)
+    vim.api.nvim_exec_autocmds("WinLeave", { buffer = second })
     assert.equal("VISIBLE", session.get().visibility)
     vim.api.nvim_exec_autocmds("BufLeave", { buffer = first })
     assert.equal("HARD_HIDDEN", session.get().visibility)

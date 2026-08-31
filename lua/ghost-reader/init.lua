@@ -20,7 +20,6 @@ local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local session = require("ghost-reader.session")
-local history = require("ghost-reader.history")
 
 -- [Lua概念] M.config = nil 表示"尚未初始化"。
 -- 第一次调用 M.setup() 时才会被赋值。
@@ -42,11 +41,7 @@ function M.open(path)
   -- [Lua概念] 懒初始化：如果还没调用 setup()，先用默认配置初始化。
   if not M.config then M.setup() end
   session.configure(M.config)
-  local ok = session.start(path, "overlay")
-  if ok then
-    -- 记录到历史
-    history.record(path, M.config)
-  end
+  session.start(path, "overlay")
 end
 
 -- 关闭阅读模式

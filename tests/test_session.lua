@@ -83,6 +83,38 @@ describe("session", function()
     session.stop()
   end)
 
+  it("keeps the active session when renderer creation fails during replacement", function()
+    local create_calls = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        create_calls = create_calls + 1
+        return nil
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local good_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "alpha" }, good_path)
+
+    session.configure(cfg)
+    assert.is_false(session.start(good_path, "overlay"))
+    assert.equal(1, create_calls)
+    assert.is_nil(session.get())
+  end)
+
   it("records history only after a successful start", function()
     local history_calls = {}
     package.loaded["ghost-reader.history"] = {
@@ -112,6 +144,36 @@ describe("session", function()
     assert.is_true(session.start(good_path, "overlay"))
     assert.same({ good_path }, history_calls)
     session.stop()
+  end)
+
+  it("saves progress exactly once on quit pre and stop", function()
+    local saves = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.reader.progress"] = {
+      save = function() saves = saves + 1 end,
+      load = function() return nil end,
+      show = function() end,
+    }
+    package.loaded["ghost-reader.session"] = nil
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    vim.api.nvim_exec_autocmds("QuitPre", { buffer = vim.api.nvim_get_current_buf() })
+    assert.equal(1, saves)
   end)
 
   it("hard hide leaves controls before hiding and restore re-enters them for overlay", function()
@@ -145,6 +207,50 @@ describe("session", function()
     assert.is_true(session.restore())
     assert.equal("ACTIVE", session.get().controls)
     assert.same({ "enter", "leave", "leave", "enter" }, events)
+    session.stop()
+  end)
+
+  it("hides on winleave and not on bufleave when configured that way", function()
+    local events = {}
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a", "b" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer.overlay"] = {
+      supports = function() return true end,
+      start = function() return true end,
+      render = function() return true end,
+      hide = function() events[#events + 1] = "hide" end,
+      restore = function() return true end,
+      stop = function() return true end,
+      page_size = function() return 1 end,
+      segment_count = function() return 1 end,
+      segment_text = function(_, text) return text end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      stealth = { overlay = { hide_on_buf_leave = false, hide_on_win_leave = true } },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+
+    local first = helpers.new_normal_buffer({ "one" })
+    local second = helpers.new_normal_buffer({ "two" })
+    vim.api.nvim_set_current_buf(first)
+
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    vim.api.nvim_exec_autocmds("BufLeave", { buffer = first })
+    assert.equal("VISIBLE", session.get().visibility)
+    vim.api.nvim_exec_autocmds("WinLeave", { buffer = first })
+    assert.equal("HARD_HIDDEN", session.get().visibility)
+    assert.same({ "hide" }, events)
     session.stop()
   end)
 

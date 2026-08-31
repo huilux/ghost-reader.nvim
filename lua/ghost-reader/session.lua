@@ -137,12 +137,18 @@ local function setup_autocmds()
     end
   end)
 
-  autocmd({ "BufLeave", "WinLeave" }, function()
+  autocmd("BufLeave", function()
     if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_buf_leave then
       M.hide("hard")
     elseif active and active.mode == "statusline" and active.controls == "ACTIVE" then
       keymaps.leave_controls(active)
       active.controls = "INACTIVE"
+    end
+  end)
+
+  autocmd("WinLeave", function()
+    if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_win_leave then
+      M.hide("hard")
     end
   end)
 
@@ -152,10 +158,12 @@ local function setup_autocmds()
     end
   end)
 
-  autocmd("QuitPre", function()
-    save_progress()
-    M.stop()
-  end)
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = active.autocmd_group,
+    callback = function()
+      M.stop()
+    end,
+  })
 end
 
 local function open_book(path, mode)

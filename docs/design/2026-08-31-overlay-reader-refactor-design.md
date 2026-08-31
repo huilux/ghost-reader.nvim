@@ -54,7 +54,7 @@ Mirror is an internal fallback, not a third selection in the normal mode picker.
 - overlay setup raises an unrecoverable error; or
 - the user explicitly configures `reader.renderer = "mirror"`.
 
-Mirror chooses a source skeleton once per session and reuses it. It does not rescan all loaded Buffers on every page. It uses a unique scratch-buffer name instead of impersonating an existing real path, and it shares the same action and control mappings as the other modes.
+Mirror chooses a source skeleton once per session and reuses it. It does not rescan all loaded Buffers on every page. It keeps its scratch Buffer unnamed instead of impersonating an existing real path or exposing a plugin-specific URI, and it shares the same action and control mappings as the other modes.
 
 ## Reading actions and keys
 
@@ -220,6 +220,10 @@ The new configuration is the only supported schema:
       hide_on_win_leave = true,
     },
   },
+  paths = {
+    cache_dir = nil, -- defaults to stdpath("cache") .. "/ghost-reader/"
+    data_dir = nil,  -- defaults to stdpath("data") .. "/ghost-reader/"
+  },
   keymaps = {
     global = {
       open = "<leader>rr",
@@ -252,7 +256,7 @@ The new configuration is the only supported schema:
 }
 ```
 
-Configuration validation rejects unknown renderer values, invalid mode values, non-positive intervals, invalid page sizes, and non-string/non-false key bindings during `setup()`.
+Configuration validation rejects unknown renderer values, invalid mode values, non-positive intervals, invalid page sizes, non-string/non-false key bindings, and non-string path overrides during `setup()`.
 
 There is no translation for `boss_key`, the old flat `keymaps` table, `statusline.mode`, or `sparse_notes` options.
 
@@ -265,12 +269,12 @@ The target modules are:
 - `keymaps.lua`: global `<Plug>` mappings and reversible control-layer mappings.
 - `renderer/overlay.lua`: extmark virtual-line rendering.
 - `renderer/mirror.lua`: stable scratch-buffer fallback.
-- `reader/statusline.lua`: statusline view adapter and timer behavior.
+- `renderer/statusline.lua`: statusline view adapter and timer behavior.
 - `reader/navigate.lua`: pure movement of canonical reading position.
 - `bookshelf/init.lua`: stateless parser selection and result validation.
 - `config.lua`: defaults and strict validation.
 
-The legacy `stealth/boss_key.lua`, `stealth/statusline.lua`, and facade state in `stealth/init.lua` are removed. Presets remain available only to `renderer/mirror.lua` and may move under `renderer/`.
+The legacy `reader/statusline.lua`, `stealth/boss_key.lua`, `stealth/statusline.lua`, and facade state in `stealth/init.lua` are removed. Presets remain available only to `renderer/mirror.lua` under `renderer/`.
 
 The public `init.lua` becomes a small facade over session actions and selection UI. It does not inspect renderer or reader internal fields.
 

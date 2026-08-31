@@ -1,99 +1,125 @@
 # ghost-reader.nvim
 
-Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端里伪装成代码偷偷看书。
+Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像正常写代码一样看书。
 
-## 两种阅读模式
+这个插件有两个面向用户的阅读模式：
 
-### overlay（默认模式）
+- overlay 是默认模式，使用真实 buffer 上的 extmark 虚拟行显示内容，不改写文件内容、文件名、`modified` 状态或 undo 历史。
+- statusline 是底部的一行浮窗，一次显示一段文本，适合边写代码边低调阅读。
+- 当 overlay 不能直接接管目标窗口时，插件会自动回退到 mirror。
 
-在真实 buffer 上方叠加虚拟内容，不改写文件内容、文件名或状态栏。每次只显示少量书本文字，让阅读尽量贴近正常编辑。
+视觉上的伪装只是界面层面的效果，不是安全边界。
 
-### statusline（状态栏模式）
+## 快捷键
 
-在屏幕底部创建一个浮动窗口，每次显示一行文字。不影响主 buffer，正常写代码的同时看书。
+插件把快捷键分成全局入口和阅读控制层两部分。
 
-支持自动翻页和手动翻页两种子模式。
-
-## 快捷键体系
-
-快捷键分为两层：**全局入口**和**阅读模式专用**。
-
-### 全局入口快捷键
-
-在任何 buffer 下均可使用，配置在 nvim 插件配置中（如 lazy.nvim 的 `keys`）。
+全局入口建议在插件管理器里配置，适用于任何 buffer：
 
 | 快捷键 | 功能 |
-|--------|------|
-| `<leader>rr` | 打开或恢复阅读 |
-| `<leader>rs` | 打开状态栏阅读 |
+| --- | --- |
+| `<leader>rr` | 打开或恢复阅读会话 |
+| `<leader>rs` | 打开 statusline 阅读 |
 | `<leader>rm` | 进入或退出阅读控制层 |
-| `<leader>rh` | 隐藏或恢复阅读 |
-| `<leader>rt` | 目录 |
+| `<leader>rh` | 隐藏或恢复当前会话 |
+| `<leader>rt` | 打开目录 |
 | `<leader>rq` | 关闭当前会话 |
 
-`<leader>rr` 的智能行为：
-
-| 当前状态 | 按下后 |
-|----------|--------|
-| 没在阅读 | 弹出书籍选择菜单 |
-| 已在阅读 | 打开当前会话或恢复显示 |
-
-### 全屏模式快捷键（buffer-local）
-
-仅在阅读 buffer 内生效，切走后不干扰正常操作。
+阅读控制层在阅读 buffer 内生效，overlay、mirror 和 statusline 使用同一组语义：
 
 | 快捷键 | 功能 |
-|--------|------|
-| `j` | 跳到下一个内容行（自动翻页） |
-| `k` | 跳到上一个内容行（自动翻页） |
+| --- | --- |
+| `j` | 下一段内容 |
+| `k` | 上一段内容 |
+| `<C-f>` | 下一页 |
+| `<C-b>` | 上一页 |
 | `]]` | 下一章 |
 | `[[` | 上一章 |
-| `t` | 打开目录跳转 |
-| `g%` | 显示阅读进度 |
-| `gh` | 隐藏当前会话 |
+| `t` | 目录 |
+| `g%` | 进度 |
+| `gh` | 硬隐藏当前会话 |
 | `q` | 关闭当前会话 |
-| `?` | 显示按键帮助 |
+| `?` | 帮助 |
 | `<Esc>` | 退出控制层 |
 
-### 状态栏模式快捷键（buffer-local）
-
-仅在状态栏模式激活的 buffer 内生效。
+statusline 模式还支持：
 
 | 快捷键 | 功能 |
-|--------|------|
-| `j` | 下一行/段 |
-| `k` | 上一行/段 |
-| `a` | 切换自动/手动模式 |
-| `+` | 加速 |
-| `-` | 减速 |
-| `q` | 关闭当前会话 |
-| `<Esc>` | 退出控制层 |
+| --- | --- |
+| `a` | 切换自动/手动 |
+| `+` | 加快自动翻页 |
+| `-` | 减慢自动翻页 |
 
 ## 安装
 
 ```lua
--- lazy.nvim
 return {
-  'huilux/ghost-reader.nvim',
-  cmd = { 'GhostReader', 'GhostReaderClose', 'GhostReaderControl', 'GhostReaderHide', 'GhostReaderStatusline', 'GhostReaderToc' },
+  "huilux/ghost-reader.nvim",
+  cmd = {
+    "GhostReader",
+    "GhostReaderClose",
+    "GhostReaderControl",
+    "GhostReaderHide",
+    "GhostReaderStatusline",
+    "GhostReaderToc",
+  },
   keys = {
-    { '<leader>rr', function() require('ghost-reader').open() end, desc = '打开/恢复阅读' },
-    { '<leader>rs', function() require('ghost-reader').open_statusline() end, desc = '打开状态栏阅读' },
-    { '<leader>rq', function() require('ghost-reader').close() end, desc = '关闭阅读' },
+    { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open or resume reading" },
+    { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
+    { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
+    { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
+    { "<leader>rh", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
+    { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
   },
   opts = {
     reader = {
-      renderer = 'overlay',
+      renderer = "overlay",
       visible_blocks = 3,
+      mirror_fallback = true,
     },
     statusline = {
-      interval = 3000,  -- 自动翻页间隔（毫秒）
+      interval = 3000,
       autoplay = true,
       page_step = 5,
     },
     stealth = {
       hide_on_focus_lost = true,
       silent = true,
+      overlay = {
+        hide_on_insert = true,
+        hide_on_buf_leave = true,
+        hide_on_win_leave = true,
+      },
+    },
+    paths = {},
+    keymaps = {
+      global = {
+        open = "<leader>rr",
+        statusline = "<leader>rs",
+        control = "<leader>rm",
+        hide = "<leader>rh",
+        toc = "<leader>rt",
+        close = "<leader>rq",
+      },
+      controls = {
+        next_content = "j",
+        prev_content = "k",
+        next_page = "<C-f>",
+        prev_page = "<C-b>",
+        next_chapter = "]]",
+        prev_chapter = "[[",
+        toc = "t",
+        progress = "g%",
+        hide = "gh",
+        close = "q",
+        help = "?",
+        exit_controls = "<Esc>",
+      },
+      statusline = {
+        toggle_auto = "a",
+        faster = "+",
+        slower = "-",
+      },
     },
   },
 }
@@ -102,18 +128,111 @@ return {
 ## 命令
 
 | 命令 | 功能 |
-|------|------|
-| `:GhostReader [path]` | 打开书籍（无参数弹出选择） |
-| `:GhostReaderClose` | 关闭阅读 |
+| --- | --- |
+| `:GhostReader [path]` | 打开书籍；无参数时选择历史记录 |
+| `:GhostReaderClose` | 关闭当前会话 |
 | `:GhostReaderControl` | 进入或退出阅读控制层 |
-| `:GhostReaderHide` | 隐藏或恢复当前会话 |
+| `:GhostReaderHide` | 硬隐藏或恢复当前会话 |
+| `:GhostReaderStatusline [path]` | 以 statusline 模式打开 |
 | `:GhostReaderToc` | 打开目录 |
-| `:GhostReaderStatusline [path]` | 以状态栏模式打开 |
 
-## 功能
+## 阅读模式
 
-- **书籍历史**：自动记录最近打开的书籍，`<leader>rr` 直接选择
-- **进度记忆**：自动保存/恢复章节和行位置
-- **会话控制**：`<leader>rm` 进入控制层，`<leader>rh` 隐藏或恢复
-- **多格式**：EPUB（需系统有 unzip）、TXT、Markdown
-- **长文本换行**：overlay 模式按可视区域宽度展示，状态栏模式按屏幕宽度分段显示
+overlay：
+
+- 默认模式。
+- 用 extmark 和 `virt_lines` 把内容画到真实 buffer 上方。
+- 适合最像“正常编辑”的伪装方式。
+
+statusline：
+
+- 底部一行浮窗。
+- 支持自动翻页和手动翻页。
+- 长文本会按窗口宽度切段显示。
+
+mirror：
+
+- overlay 受限时的自动回退。
+- 使用匿名 scratch buffer 作为稳定替身。
+
+## Stealth 事件
+
+当 `stealth` 选项开启时，插件会根据环境自动隐藏或恢复当前会话。常见的自动隐藏来源包括：
+
+- 切换到插入模式；
+- 离开当前 buffer；
+- 离开当前窗口；
+- 失去焦点。
+
+`gh` 是手动硬隐藏，它会恢复被接管的映射和控制层。`<Esc>` 只退出控制层，不会自动重新显示会话。
+
+## 配置
+
+```lua
+require("ghost-reader").setup({
+  reader = {
+    renderer = "overlay",
+    visible_blocks = 3,
+    mirror_fallback = true,
+  },
+  statusline = {
+    interval = 3000,
+    autoplay = true,
+    page_step = 5,
+  },
+  stealth = {
+    hide_on_focus_lost = true,
+    silent = true,
+    overlay = {
+      hide_on_insert = true,
+      hide_on_buf_leave = true,
+      hide_on_win_leave = true,
+    },
+  },
+  paths = {
+    cache_dir = vim.fn.stdpath("cache") .. "/ghost-reader/",
+    data_dir = vim.fn.stdpath("data") .. "/ghost-reader/",
+  },
+  keymaps = {
+    global = {
+      open = "<leader>rr",
+      statusline = "<leader>rs",
+      control = "<leader>rm",
+      hide = "<leader>rh",
+      toc = "<leader>rt",
+      close = "<leader>rq",
+    },
+    controls = {
+      next_content = "j",
+      prev_content = "k",
+      next_page = "<C-f>",
+      prev_page = "<C-b>",
+      next_chapter = "]]",
+      prev_chapter = "[[",
+      toc = "t",
+      progress = "g%",
+      hide = "gh",
+      close = "q",
+      help = "?",
+      exit_controls = "<Esc>",
+    },
+    statusline = {
+      toggle_auto = "a",
+      faster = "+",
+      slower = "-",
+    },
+  },
+})
+```
+
+## 需求
+
+- Neovim 0.10+
+- `unzip` 仅用于 EPUB 支持
+- Plenary 只用于测试
+
+## 排查
+
+- 如果 `:GhostReaderStatusline` 没有弹出浮窗，先确认当前窗口没有被其他插件强制改写。
+- 如果 overlay 不工作，插件会自动回退到 mirror。
+- 如果你看不到任何内容，检查 `visible_blocks`、窗口宽度，以及当前文件是否真的可读。

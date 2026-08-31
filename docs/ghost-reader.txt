@@ -5,38 +5,103 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 1. Introduction                                    |ghost-reader-intro|
 2. Setup                                           |ghost-reader-setup|
 3. Commands                                        |ghost-reader-commands|
-4. Configuration                                   |ghost-reader-config|
-5. Reading Modes                                   |ghost-reader-modes|
-6. Keymaps                                         |ghost-reader-keymaps|
+4. Overlay                                         |ghost-reader-overlay|
+5. Statusline                                      |ghost-reader-statusline|
+6. Controls                                        |ghost-reader-controls|
+7. Stealth events                                  |ghost-reader-stealth|
+8. Configuration                                   |ghost-reader-config|
+9. Troubleshooting                                 |ghost-reader-troubleshooting|
 
 ==============================================================================
 1. Introduction                                    |ghost-reader-intro|
 
 ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
-with an overlay mode that keeps book content in the real buffer and a
-statusline mode that shows a one-line floating reader.
+with two user-facing modes:
+
+  - overlay: the default real-buffer extmark reader
+  - statusline: a one-line floating reader at the bottom of the screen
+
+When overlay cannot attach cleanly, the plugin falls back to mirror
+automatically. That fallback keeps the session usable, but it is still only a
+visual layer. Concealment is not a security boundary.
 
 Requirements:
-  - Neovim >= 0.10
-  - `unzip` (for EPUB support)
+  - Neovim 0.10+
+  - `unzip` for EPUB support
+  - Plenary for tests only
 
 ==============================================================================
 2. Setup                                           |ghost-reader-setup|
 
 >lua
-  -- lazy.nvim
   {
     "huilux/ghost-reader.nvim",
-    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderControl", "GhostReaderHide", "GhostReaderStatusline", "GhostReaderToc" },
+    cmd = {
+      "GhostReader",
+      "GhostReaderClose",
+      "GhostReaderControl",
+      "GhostReaderHide",
+      "GhostReaderStatusline",
+      "GhostReaderToc",
+    },
     keys = {
-      { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open/resume" },
-      { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Statusline reader" },
-      { "<leader>rq", function() require("ghost-reader").close() end, desc = "Quit" },
+      { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open or resume reading" },
+      { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
+      { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
+      { "<leader>rh", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
+      { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
+      { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
     },
     opts = {
-      reader = { renderer = "overlay", visible_blocks = 3 },
-      statusline = { interval = 3000, autoplay = true, page_step = 5 },
-      stealth = { hide_on_focus_lost = true, silent = true },
+      reader = {
+        renderer = "overlay",
+        visible_blocks = 3,
+        mirror_fallback = true,
+      },
+      statusline = {
+        interval = 3000,
+        autoplay = true,
+        page_step = 5,
+      },
+      stealth = {
+        hide_on_focus_lost = true,
+        silent = true,
+        overlay = {
+          hide_on_insert = true,
+          hide_on_buf_leave = true,
+          hide_on_win_leave = true,
+        },
+      },
+      paths = {},
+      keymaps = {
+        global = {
+          open = "<leader>rr",
+          statusline = "<leader>rs",
+          control = "<leader>rm",
+          hide = "<leader>rh",
+          toc = "<leader>rt",
+          close = "<leader>rq",
+        },
+        controls = {
+          next_content = "j",
+          prev_content = "k",
+          next_page = "<C-f>",
+          prev_page = "<C-b>",
+          next_chapter = "]]",
+          prev_chapter = "[[",
+          toc = "t",
+          progress = "g%",
+          hide = "gh",
+          close = "q",
+          help = "?",
+          exit_controls = "<Esc>",
+        },
+        statusline = {
+          toggle_auto = "a",
+          faster = "+",
+          slower = "-",
+        },
+      },
     },
   }
 <
@@ -44,53 +109,48 @@ Requirements:
 ==============================================================================
 3. Commands                                        |ghost-reader-commands|
 
-:GhostReader [path]        Open an ebook (no arg shows book history)
-:GhostReaderClose          Close current book
-:GhostReaderControl        Toggle reading controls
-:GhostReaderHide            Hide or restore the active session
-:GhostReaderStatusline     Open in statusline mode (bottom float win)
-:GhostReaderToc             Open table of contents
+:GhostReader [path]        Open an ebook or pick from history
+:GhostReaderClose          Close the current session
+:GhostReaderControl        Toggle the reading control layer
+:GhostReaderHide            Hide or restore the current session
+:GhostReaderStatusline     Open in statusline mode
+:GhostReaderToc             Open the table of contents
 
 ==============================================================================
-4. Configuration                                   |ghost-reader-config~
+4. Overlay                                         |ghost-reader-overlay|
 
->lua
-  opts = {
-    reader = { renderer = "overlay", visible_blocks = 3 },
-    statusline = {
-      interval = 3000,
-      autoplay = true,
-      page_step = 5,
-    },
-    stealth = {
-      hide_on_focus_lost = true,
-      silent = true,
-    },
-  }
-<
+overlay is the default mode.
+
+  - It renders book content onto the real buffer with extmarks and virtual
+    lines.
+  - It does not rewrite the buffer text, name, filetype, or modified state.
+  - If the real-buffer renderer cannot attach cleanly, the plugin falls back
+    to mirror.
 
 ==============================================================================
-5. Reading Modes                                   |ghost-reader-modes~
+5. Statusline                                      |ghost-reader-statusline|
 
-overlay (default) ~
-  Book content is drawn over the real buffer with virtual lines. The file
-  contents remain unchanged.
+statusline mode uses a one-line floating window at the bottom of the screen.
 
-statusline (bottom float window) ~
-  A 1-row floating window at the bottom shows one line at a time. Supports
-  auto-advance (configurable interval) and manual (j/k) modes. Long text
-  is split into screen-width chunks.
+  - `j` and `k` move by line or segment.
+  - `a` toggles autoplay.
+  - `+` and `-` adjust autoplay speed.
+  - Long text is wrapped by display width.
 
 ==============================================================================
-6. Keymaps                                         |ghost-reader-keymaps~
+6. Controls                                        |ghost-reader-controls|
 
-Global (available in any buffer):
-  <leader>rr    Open book / resume reading
+Global mappings:
+
+  <leader>rr    Open or resume reading
   <leader>rs    Open statusline reader
-  <leader>rq    Close the active session
-  <leader>rt    Table of contents
+  <leader>rm    Toggle reading controls
+  <leader>rh    Hide or restore the current session
+  <leader>rt    Open the table of contents
+  <leader>rq    Close the current session
 
-Control layer (buffer-local):
+Control layer mappings:
+
   j             Next content
   k             Previous content
   <C-f>         Next page
@@ -99,15 +159,93 @@ Control layer (buffer-local):
   [[            Previous chapter
   t             Table of contents
   g%            Show progress
-  gh            Hide session
+  gh            Hard hide session
   q             Close session
   ?             Help
   <Esc>         Exit controls
 
-Statusline mode (buffer-local):
-  a             Toggle autoplay
-  +             Speed up
-  -             Slow down
-  <Esc>         Exit controls
+==============================================================================
+7. Stealth events                                  |ghost-reader-stealth|
+
+The stealth layer can hide the session automatically on:
+
+  - Insert mode entry
+  - Buffer leave
+  - Window leave
+  - Focus lost
+
+`gh` performs a hard hide and restores the captured mappings. `<Esc>` only
+exits the control layer.
+
+==============================================================================
+8. Configuration                                   |ghost-reader-config|
+
+>lua
+  require("ghost-reader").setup({
+    reader = {
+      renderer = "overlay",
+      visible_blocks = 3,
+      mirror_fallback = true,
+    },
+    statusline = {
+      interval = 3000,
+      autoplay = true,
+      page_step = 5,
+    },
+    stealth = {
+      hide_on_focus_lost = true,
+      silent = true,
+      overlay = {
+        hide_on_insert = true,
+        hide_on_buf_leave = true,
+        hide_on_win_leave = true,
+      },
+    },
+    paths = {
+      cache_dir = vim.fn.stdpath("cache") .. "/ghost-reader/",
+      data_dir = vim.fn.stdpath("data") .. "/ghost-reader/",
+    },
+    keymaps = {
+      global = {
+        open = "<leader>rr",
+        statusline = "<leader>rs",
+        control = "<leader>rm",
+        hide = "<leader>rh",
+        toc = "<leader>rt",
+        close = "<leader>rq",
+      },
+      controls = {
+        next_content = "j",
+        prev_content = "k",
+        next_page = "<C-f>",
+        prev_page = "<C-b>",
+        next_chapter = "]]",
+        prev_chapter = "[[",
+        toc = "t",
+        progress = "g%",
+        hide = "gh",
+        close = "q",
+        help = "?",
+        exit_controls = "<Esc>",
+      },
+      statusline = {
+        toggle_auto = "a",
+        faster = "+",
+        slower = "-",
+      },
+    },
+  })
+<
+
+==============================================================================
+9. Troubleshooting                                 |ghost-reader-troubleshooting|
+
+If `:GhostReaderStatusline` opens nothing, check that the current buffer is
+still valid and that another plugin has not replaced the window.
+
+If overlay does not attach, mirror fallback should keep the session alive.
+
+If the session appears blank, check `visible_blocks`, the current window width,
+and whether the source file is readable text.
 
  vim:tw=78:ts=8:ft=help:norl:

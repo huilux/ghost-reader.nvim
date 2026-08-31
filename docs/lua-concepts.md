@@ -326,7 +326,7 @@ plugin/ghost-reader.lua          ← 启动时自动加载，注册 :GhostReader
         │
         │ require()
         ▼
-lua/ghost-reader/init.lua        ← 主模块：setup()、open()、open_statusline()
+lua/ghost-reader/init.lua        ← 主模块：setup()、open()、open_statusline()、close()、toc()
         │
         ├── config.lua           ← 默认配置 + 深度合并
         ├── utils.lua            ← 工具函数（文件检测、格式识别）

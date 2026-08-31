@@ -39,4 +39,5 @@ Verification:
 Notes:
 
 - The scan still reports the legacy key names inside `tests/test_config.lua`, but only as negative assertions that confirm the old configuration keys are rejected.
+- The shipped docs now use lowercase `j/k` throughout the control-layer examples.
 - The scan no longer reports stale shipped control examples; the remaining hits are intentional references in tests and internal readers/navigate helpers.

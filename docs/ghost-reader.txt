@@ -78,7 +78,7 @@ overlay (default) ~
 
 statusline (bottom float window) ~
   A 1-row floating window at the bottom shows one line at a time. Supports
-  auto-advance (configurable interval) and manual (J/K) modes. Long text
+  auto-advance (configurable interval) and manual (j/k) modes. Long text
   is split into screen-width chunks.
 
 ==============================================================================

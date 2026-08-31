@@ -6,7 +6,7 @@ local history = require("ghost-reader.history")
 
 M.config = nil
 
-local function select_book(preferred_mode)
+local function choose_book(preferred_mode)
   if not M.config then M.setup() end
   local entries = history.load(M.config)
   local items = {}
@@ -38,13 +38,18 @@ function M.setup(user_config)
   M.config = config.setup(user_config or {})
   utils.ensure_dir(M.config.paths.cache_dir)
   utils.ensure_dir(M.config.paths.data_dir)
+  require("ghost-reader.keymaps").setup(M.config)
   return M.config
 end
 
 function M.open(path)
   if not M.config then M.setup() end
+  local current = session.get()
   if not path or path == "" then
-    return select_book("overlay")
+    if current and current.visibility ~= "IDLE" and current.visibility ~= "VISIBLE" then
+      return session.restore()
+    end
+    return choose_book("overlay")
   end
   session.configure(M.config)
   session.start(path, "overlay")
@@ -53,7 +58,7 @@ end
 function M.open_statusline(path)
   if not M.config then M.setup() end
   if not path or path == "" then
-    return select_book("statusline")
+    return choose_book("statusline")
   end
   session.configure(M.config)
   session.start(path, "statusline")

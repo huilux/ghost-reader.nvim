@@ -1,6 +1,6 @@
 # Task 10 Report
 
-Cutover completed for the public API and compatibility surface.
+Cutover completed for the public API and compatibility surface, plus the follow-up fixes requested in round 1.
 
 What changed:
 
@@ -8,6 +8,7 @@ What changed:
   - `lua/ghost-reader/renderer/sparse_notes.lua`
   - `lua/ghost-reader/stealth/boss_key.lua`
   - `lua/ghost-reader/stealth/init.lua`
+  - `lua/ghost-reader/stealth/statusline.lua`
   - `lua/ghost-reader/reader/init.lua`
   - `lua/ghost-reader/reader/statusline.lua`
 - Simplified the public module to the final API:
@@ -16,6 +17,8 @@ What changed:
   - `close()`
   - `toc()`
   - `setup()`
+- `setup()` now installs the final global `<Plug>` mappings via `keymaps.setup()`.
+- `open()` now restores a hidden session when called without a path instead of always opening the picker.
 - Updated `plugin/ghost-reader.lua` to expose only the final commands:
   - `:GhostReader`
   - `:GhostReaderClose`
@@ -24,13 +27,13 @@ What changed:
   - `:GhostReaderStatusline`
   - `:GhostReaderToc`
 - Updated `lua/ghost-reader/actions.lua` and `lua/ghost-reader/keymaps.lua` to use the final entrypoints and `<Plug>` mappings only.
-- Updated the user docs in `README.md` and `docs/ghost-reader.txt` to match the final names.
+- Updated the user docs in `README.md`, `docs/ghost-reader.txt`, and `docs/lua-concepts.md` to match the final names.
 - Updated tests so they enforce the cutover instead of the removed compatibility helpers.
 
 Verification:
 
 - `make test-all`
-- `rg -n 'GhostReaderBoss|GhostReaderRestore|stealth\\.boss_key|reader\\.state|reader_statusline\\.state|sparse_notes|boss_key|restore_keys|statusline\\.mode|<leader>go|<leader>gq|<leader>gt|<Esc><Esc>|\\]c|\\[c' lua plugin tests README.md docs/ghost-reader.txt`
+- `rg -n 'GhostReaderBoss|GhostReaderRestore|stealth\\.boss_key|reader\\.state|reader_statusline\\.state|sparse_notes|boss_key|restore_keys|statusline\\.mode|<leader>go|<leader>gq|<leader>gt|<Esc><Esc>|\\]c|\\[c' lua plugin tests README.md docs/ghost-reader.txt docs/lua-concepts.md`
 
 Notes:
 

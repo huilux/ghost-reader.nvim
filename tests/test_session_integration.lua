@@ -121,4 +121,42 @@ describe("session integration", function()
     assert.is_true(session.start(book_path, "overlay"))
     session.stop()
   end)
+
+  it("applies overlay autocmd soft and hard hide transitions", function()
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local book_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "placeholder" }, book_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(book_path, "overlay"))
+    vim.api.nvim_exec_autocmds("InsertEnter", {})
+    assert.equal("SOFT_HIDDEN", session.get().visibility)
+    vim.api.nvim_exec_autocmds("InsertLeave", {})
+    assert.equal("VISIBLE", session.get().visibility)
+    vim.api.nvim_exec_autocmds("FocusLost", {})
+    assert.equal("HARD_HIDDEN", session.get().visibility)
+    session.stop()
+  end)
+
+  it("exits controls on statusline buffer leave without hiding the float", function()
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local book_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "placeholder" }, book_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(book_path, "statusline"))
+    assert.equal("INACTIVE", session.get().controls)
+    vim.api.nvim_exec_autocmds("BufLeave", {})
+    assert.equal("VISIBLE", session.get().visibility)
+    assert.equal("INACTIVE", session.get().controls)
+    session.stop()
+  end)
 end)

@@ -129,8 +129,9 @@ local function setup_autocmds()
   autocmd({ "BufLeave", "WinLeave" }, function()
     if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_buf_leave then
       M.hide("hard")
-    elseif active and active.mode == "statusline" then
-      M.dispatch("exit_controls")
+    elseif active and active.mode == "statusline" and active.controls == "ACTIVE" then
+      keymaps.leave_controls(active)
+      active.controls = "INACTIVE"
     end
   end)
 
@@ -237,6 +238,9 @@ function M.hide(policy)
     active.hidden_policy = "soft"
     return true
   end
+  if active.controls == "ACTIVE" then
+    keymaps.leave_controls(active)
+  end
   active.visibility = "HARD_HIDDEN"
   active.controls = "INACTIVE"
   active.hidden_policy = "hard"
@@ -286,7 +290,8 @@ function M.restore()
     render_current()
   end
   active.hidden_policy = nil
-  if active.controls == "ACTIVE" then
+  if active.mode ~= "statusline" then
+    active.controls = "ACTIVE"
     keymaps.enter_controls(active, active.config)
   end
   return true
@@ -336,7 +341,15 @@ function M.dispatch(name)
     progress.show(active.book, active.position)
     return true
   elseif name == "toggle_auto" or name == "faster" or name == "slower" then
-    return active.mode == "statusline"
+    if active.mode ~= "statusline" then
+      return false
+    end
+    local fn = active.renderer[name]
+    if type(fn) ~= "function" then
+      return false
+    end
+    fn(active.ctx)
+    return true
   end
 
   local next_pos, moved = nil, false

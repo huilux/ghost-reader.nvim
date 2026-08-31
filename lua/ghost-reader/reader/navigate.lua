@@ -1,87 +1,197 @@
---[[
-  reader/navigate.lua - 翻页/翻章导航逻辑
-
-  角色：纯逻辑模块，处理翻页、翻章、跳转等导航操作。
-  不涉及任何 Neovim API 调用——所有函数只操作 state 表。
-  这种设计使得导航逻辑可以在没有 Neovim 的环境中测试。
-
-  本文件涉及的关键概念：
-  - [Lua概念] 表作为引用传递（函数内修改影响调用方）
-  - [Lua概念] 多返回值用作状态标记 (state, success)
-  - [Lua概念] math.min 数值比较
-
-  关联模块：被 reader/init.lua 和 reader/statusline.lua 调用。
-]]
-
 local M = {}
 
--- 获取当前页面要显示的行
+local function copy(pos)
+  return {
+    chapter_index = pos.chapter_index,
+    line_index = pos.line_index,
+    segment_index = pos.segment_index,
+  }
+end
+
 function M.get_page_lines(chapter_lines, offset, page_size)
   local lines = {}
-  -- 从 offset+1 开始，取 page_size 行（或到章节末尾）
-  for i = offset + 1, math.min(offset + page_size, #chapter_lines) do
-    table.insert(lines, chapter_lines[i])
+  for i = (offset or 0) + 1, math.min((offset or 0) + (page_size or 0), #chapter_lines) do
+    lines[#lines + 1] = chapter_lines[i]
   end
   return lines
 end
 
--- [Lua概念] 所有导航函数都遵循相同的签名：
---   function M.xxx(state, ...) → return state, success
--- state 是一个表，包含 { book, chapter_index, line_offset, ... }。
--- [Lua概念] Lua 中表是引用类型（传递的是指针），
--- 所以函数内修改 state.chapter_index 会直接影响调用方的 state。
--- 返回 state 只是为了方便链式调用，不是必须的。
--- 第二个返回值是布尔值：true = 成功翻页，false = 已到边界。
-
-function M.next_page(state, page_size)
-  local new_offset = state.line_offset + page_size
-  local chapter = state.book.chapters[state.chapter_index]
-  if not chapter then return state, false end
-  if new_offset >= #chapter.lines then
-    -- 当前章节剩余内容不够一页，自动跳到下一章
-    return M.next_chapter(state)
-  end
-  state.line_offset = new_offset
-  return state, true
+local function chapter_count(book)
+  return #(book and book.chapters or {})
 end
 
-function M.prev_page(state, page_size)
-  local new_offset = state.line_offset - page_size
-  if new_offset < 0 then
-    -- 已到当前章节开头，跳到上一章
-    return M.prev_chapter(state)
-  end
-  state.line_offset = new_offset
-  return state, true
+local function line_count(book, chapter_index)
+  local chapter = book.chapters[chapter_index]
+  return chapter and #(chapter.lines or {}) or 0
 end
 
-function M.next_chapter(state)
-  if state.chapter_index >= #state.book.chapters then
-    -- 已是最后一章，无法继续
-    return state, false
-  end
-  state.chapter_index = state.chapter_index + 1
-  state.line_offset = 0
-  return state, true
+local function segment_total(book, position, segment_count)
+  local count = segment_count(position.chapter_index, position.line_index)
+  return math.max(1, tonumber(count) or 1)
 end
 
-function M.prev_chapter(state)
-  if state.chapter_index <= 1 then
-    -- 已是第一章，无法继续
-    return state, false
+local function clamp(value, min_value, max_value)
+  if value < min_value then
+    return min_value
   end
-  state.chapter_index = state.chapter_index - 1
-  state.line_offset = 0
-  return state, true
+  if value > max_value then
+    return max_value
+  end
+  return value
 end
 
-function M.go_to_chapter(state, chapter_index)
-  if chapter_index < 1 or chapter_index > #state.book.chapters then
-    return state, false
+function M.normalize(book, position, segment_count)
+  local chapters = chapter_count(book)
+  if chapters == 0 then
+    return copy({ chapter_index = 1, line_index = 1, segment_index = 1 })
   end
-  state.chapter_index = chapter_index
-  state.line_offset = 0
-  return state, true
+
+  local chapter_index = clamp(tonumber(position.chapter_index) or 1, 1, chapters)
+  local lines = math.max(1, line_count(book, chapter_index))
+  local line_index = clamp(tonumber(position.line_index) or 1, 1, lines)
+  local segments = segment_total(book, { chapter_index = chapter_index, line_index = line_index }, segment_count)
+  local segment_index = clamp(tonumber(position.segment_index) or 1, 1, segments)
+
+  return {
+    chapter_index = chapter_index,
+    line_index = line_index,
+    segment_index = segment_index,
+  }
+end
+
+local function advance(book, position, segment_count, direction)
+  local pos = M.normalize(book, position, segment_count)
+  local chapters = chapter_count(book)
+  if chapters == 0 then
+    return copy(pos), false
+  end
+
+  local segments = segment_total(book, pos, segment_count)
+  if direction > 0 then
+    if pos.segment_index < segments then
+      pos.segment_index = pos.segment_index + 1
+      return pos, true
+    end
+    local lines = line_count(book, pos.chapter_index)
+    if pos.line_index < lines then
+      pos.line_index = pos.line_index + 1
+      pos.segment_index = 1
+      return pos, true
+    end
+    if pos.chapter_index < chapters then
+      pos.chapter_index = pos.chapter_index + 1
+      pos.line_index = 1
+      pos.segment_index = 1
+      return pos, true
+    end
+    return pos, false
+  end
+
+  if pos.segment_index > 1 then
+    pos.segment_index = pos.segment_index - 1
+    return pos, true
+  end
+  if pos.line_index > 1 then
+    pos.line_index = pos.line_index - 1
+    pos.segment_index = segment_total(book, pos, segment_count)
+    return pos, true
+  end
+  if pos.chapter_index > 1 then
+    pos.chapter_index = pos.chapter_index - 1
+    pos.line_index = math.max(1, line_count(book, pos.chapter_index))
+    pos.segment_index = segment_total(book, pos, segment_count)
+    return pos, true
+  end
+  return pos, false
+end
+
+function M.next_content(book, position, segment_count)
+  return advance(book, position, segment_count, 1)
+end
+
+function M.prev_content(book, position, segment_count)
+  return advance(book, position, segment_count, -1)
+end
+
+function M.next_page(book, position, step, segment_count)
+  local pos = copy(M.normalize(book, position, segment_count))
+  local moved = false
+  for _ = 1, math.max(0, tonumber(step) or 0) do
+    local next_pos, did_move = M.next_content(book, pos, segment_count)
+    pos = next_pos
+    moved = moved or did_move
+    if not did_move then
+      break
+    end
+  end
+  return pos, moved
+end
+
+function M.prev_page(book, position, step, segment_count)
+  local pos = copy(M.normalize(book, position, segment_count))
+  local moved = false
+  for _ = 1, math.max(0, tonumber(step) or 0) do
+    local prev_pos, did_move = M.prev_content(book, pos, segment_count)
+    pos = prev_pos
+    moved = moved or did_move
+    if not did_move then
+      break
+    end
+  end
+  return pos, moved
+end
+
+function M.next_chapter(book, position, segment_count)
+  local pos = M.normalize(book, position, segment_count)
+  if pos.chapter_index >= chapter_count(book) then
+    return pos, false
+  end
+  return {
+    chapter_index = pos.chapter_index + 1,
+    line_index = 1,
+    segment_index = 1,
+  }, true
+end
+
+function M.prev_chapter(book, position, segment_count)
+  local pos = M.normalize(book, position, segment_count)
+  if pos.chapter_index <= 1 then
+    return pos, false
+  end
+  return {
+    chapter_index = pos.chapter_index - 1,
+    line_index = 1,
+    segment_index = 1,
+  }, true
+end
+
+function M.go_to_chapter(book, position, chapter_index, segment_count)
+  local pos = M.normalize(book, position, segment_count)
+  local target = clamp(tonumber(chapter_index) or 1, 1, chapter_count(book))
+  if target == pos.chapter_index then
+    return pos, false
+  end
+  return {
+    chapter_index = target,
+    line_index = 1,
+    segment_index = 1,
+  }, true
+end
+
+function M.peek(book, position, count, segment_count)
+  local items = {}
+  local pos = copy(M.normalize(book, position, segment_count))
+  local limit = math.max(1, tonumber(count) or 1)
+  items[1] = copy(pos)
+  for i = 2, limit do
+    local next_pos, moved = M.next_content(book, pos, segment_count)
+    if not moved then
+      break
+    end
+    pos = next_pos
+    items[#items + 1] = copy(pos)
+  end
+  return items
 end
 
 return M

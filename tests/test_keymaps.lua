@@ -1,0 +1,91 @@
+local helpers = require("tests.helpers")
+local config = require("ghost-reader.config")
+local keymaps = require("ghost-reader.keymaps")
+
+describe("keymaps", function()
+  local function maparg_in_buf(buf, lhs)
+    return vim.api.nvim_buf_call(buf, function()
+      return vim.fn.maparg(lhs, "n", false, true)
+    end)
+  end
+
+  before_each(function()
+    helpers.reset_modules()
+  end)
+
+  it("restores a pre-existing buffer mapping", function()
+    local buf = helpers.new_normal_buffer({ "one" })
+    vim.keymap.set("n", "j", "gj", { buffer = buf, desc = "user j" })
+    local session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(session, config.setup())
+    assert.equal("Ghost Reader: next content", maparg_in_buf(buf, "j").desc)
+    keymaps.leave_controls(session)
+    local restored = maparg_in_buf(buf, "j")
+    assert.equal("gj", restored.rhs)
+    assert.equal("user j", restored.desc)
+  end)
+
+  it("deletes only plugin mappings when no previous map exists", function()
+    local buf = helpers.new_normal_buffer({ "one" })
+    local session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(session, config.setup())
+    keymaps.leave_controls(session)
+    assert.same({}, maparg_in_buf(buf, "j"))
+  end)
+
+  it("installs statusline extras only in statusline mode", function()
+    local buf = helpers.new_normal_buffer({ "one" })
+    local statusline_session = { mode = "statusline", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(statusline_session, config.setup())
+    assert.is_truthy(vim.fn.maparg("a", "n", false, true).rhs)
+    assert.is_truthy(vim.fn.maparg("+", "n", false, true).rhs)
+    assert.is_truthy(vim.fn.maparg("-", "n", false, true).rhs)
+    keymaps.leave_controls(statusline_session)
+
+    local overlay_session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(overlay_session, config.setup())
+    assert.same({}, maparg_in_buf(buf, "a"))
+    assert.same({}, maparg_in_buf(buf, "+"))
+    assert.same({}, maparg_in_buf(buf, "-"))
+    keymaps.leave_controls(overlay_session)
+  end)
+
+  it("skips false bindings", function()
+    local buf = helpers.new_normal_buffer({ "one" })
+    local session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(session, config.setup({ keymaps = { controls = { help = false } } }))
+    assert.same({}, maparg_in_buf(buf, "?"))
+    keymaps.leave_controls(session)
+  end)
+
+  it("cleans the captured buffer after current buffer changes", function()
+    local first = helpers.new_normal_buffer({ "one" })
+    local second = vim.api.nvim_create_buf(true, false)
+    vim.keymap.set("n", "j", "gj", { buffer = first, desc = "user j" })
+    local session = { mode = "overlay", control_buf = first, controls_active = false }
+    keymaps.enter_controls(session, config.setup())
+    vim.api.nvim_set_current_buf(second)
+    keymaps.leave_controls(session)
+    assert.equal("gj", maparg_in_buf(first, "j").rhs)
+    assert.same({}, maparg_in_buf(second, "j"))
+  end)
+
+  it("sets global mappings idempotently", function()
+    local cfg = config.setup()
+    keymaps.setup(cfg)
+    keymaps.setup(cfg)
+    local expected = {
+      { lhs = "<leader>rr", rhs = "<Plug>(GhostReaderOpen)" },
+      { lhs = "<leader>rs", rhs = "<Plug>(GhostReaderStatusline)" },
+      { lhs = "<leader>rm", rhs = "<Plug>(GhostReaderControl)" },
+      { lhs = "<leader>rh", rhs = "<Plug>(GhostReaderHide)" },
+      { lhs = "<leader>rt", rhs = "<Plug>(GhostReaderToc)" },
+      { lhs = "<leader>rq", rhs = "<Plug>(GhostReaderClose)" },
+    }
+    for _, item in ipairs(expected) do
+      local resolved = item.lhs:gsub("<leader>", vim.g.mapleader or "\\")
+      local map = vim.fn.maparg(resolved, "n", false, true)
+      assert.equal(item.rhs, map.rhs)
+    end
+  end)
+end)

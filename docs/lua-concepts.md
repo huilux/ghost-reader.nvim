@@ -33,12 +33,15 @@ local mix = { "first", key = "value", [10] = "tenth" }
 
 -- 嵌套表
 local nested = {
-  boss_key = {
-    keys = "<Esc><Esc>",
-    use_current_buffer = true,
+  reader = {
+    renderer = "overlay",
+    visible_blocks = 3,
   },
   keymaps = {
-    next_page = "J",
+    global = {
+      open = "<leader>rr",
+      statusline = "<leader>rs",
+    },
   },
 }
 ```
@@ -178,7 +181,7 @@ if err then ... end
 ### 匿名函数
 
 ```lua
-vim.keymap.set("n", "J", function()
+vim.keymap.set("n", "j", function()
   -- 回调函数直接内联定义
 end)
 ```
@@ -323,7 +326,7 @@ plugin/ghost-reader.lua          ← 启动时自动加载，注册 :GhostReader
         │
         │ require()
         ▼
-lua/ghost-reader/init.lua        ← 主模块：setup()、open()、select_book()
+lua/ghost-reader/init.lua        ← 主模块：setup()、open()、open_statusline()、close()、toc()
         │
         ├── config.lua           ← 默认配置 + 深度合并
         ├── utils.lua            ← 工具函数（文件检测、格式识别）
@@ -335,21 +338,16 @@ lua/ghost-reader/init.lua        ← 主模块：setup()、open()、select_book(
         │   ├── parser_md.lua    ← Markdown 解析
         │   └── parser_epub.lua  ← EPUB 解析（解压 + HTML 提取）
         │
-        ├── reader/              ← 阅读模式
-        │   ├── init.lua         ← 全屏模式控制器
+        ├── reader/              ← 阅读逻辑
         │   ├── navigate.lua     ← 翻页/翻章导航逻辑
-        │   ├── progress.lua     ← 阅读进度保存/加载
-        │   └── statusline.lua   ← 状态栏模式（浮动窗口）
+        │   └── progress.lua     ← 阅读进度保存/加载
         │
-        ├── renderer/            ← 内容渲染（伪装为代码）
+        ├── renderer/            ← 内容渲染
         │   ├── init.lua         ← 调度器
-        │   └── sparse_notes.lua ← 将文字伪装为 TODO/FIXME 注释
+        │   ├── overlay.lua      ← 真实 buffer 上的虚拟行覆盖
+        │   ├── mirror.lua       ← 回退用匿名 scratch buffer
+        │   └── statusline.lua    ← 状态栏浮窗
         │
-        └── stealth/             ← 隐身功能
-            ├── init.lua         ← 门面模块
-            ├── boss_key.lua     ← 老板键（瞬间切换为假代码）
-            ├── presets.lua      ← 假代码模板（Go/Python/TS/Rust/Lua）
-            └── statusline.lua   ← 状态栏伪装
 ```
 
 ### 数据流
@@ -361,25 +359,17 @@ lua/ghost-reader/init.lua        ← 主模块：setup()、open()、select_book(
 bookshelf.open(path)          检测格式 → 调用对应解析器 → 返回 book 对象
     │
     ▼
-reader.open(book, config)     创建 Buffer → 设置键映射 → 渲染内容
+ghost-reader.open(path)       选择书籍 / 恢复会话 → 交给 session
     │
     ▼
-renderer.render(lines)        将书籍文字伪装为代码注释
+session.start(path)           创建会话 → 选择 renderer → 渲染内容
     │
     ▼
-用户阅读（J/K内容跳转）
+用户阅读（j/k 内容跳转）
     │
     ▼
 navigate.next_page(state)     更新阅读位置 → 重新渲染
     │
     ▼
 progress.save(book, state)    保存进度到 JSON 文件
-
---- 老板来了！---
-    │
-    ▼
-stealth.activate_boss_key()   截取当前内容 → 替换为假代码
-    │
-    ▼
-stealth.deactivate_boss_key() 恢复原来的阅读内容
 ```

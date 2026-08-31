@@ -14,6 +14,14 @@
 
 local M = {}
 
+local function file_status(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat then
+    return nil
+  end
+  return stat
+end
+
 function M.parse(path)
   local book = {
     format = "markdown",
@@ -22,8 +30,12 @@ function M.parse(path)
     toc = {},
   }
 
+  local stat = file_status(path)
+  if not stat then return nil, "file not found: " .. path end
+  if stat.type ~= "file" then return nil, "file unreadable: " .. path end
+
   local f = io.open(path, "r")
-  if not f then return book end
+  if not f then return nil, "file unreadable: " .. path end
 
   local all_lines = {}
   for line in f:lines() do
@@ -31,34 +43,22 @@ function M.parse(path)
   end
   f:close()
 
-  -- 先检测文件中是否有 Markdown 标题
-  local has_headings = false
-  for _, line in ipairs(all_lines) do
-    -- 检测以 # 开头后跟空格的行（Markdown 标题格式）
-    if line:match("^#+%s") then
-      has_headings = true
-      break
-    end
-  end
-
-  -- 没有标题时，整个文件作为单个章节
-  if not has_headings then
-    local non_empty = {}
-    for _, line in ipairs(all_lines) do
-      if line ~= "" then table.insert(non_empty, line) end
-    end
-    table.insert(book.chapters, {
-      -- [Neovim API] vim.fn.fnamemodify(path, ":t") 提取文件名（去掉目录路径）。
-      -- 回忆：":t" = tail（仅文件名）。详见 utils.lua 或 history.lua 中的说明。
-      title = vim.fn.fnamemodify(path, ":t"),
-      lines = non_empty,
-    })
-    table.insert(book.toc, { title = book.chapters[1].title, level = 1, index = 1 })
-    return book
-  end
-
-  -- 按标题分割章节
+  local implicit_title = vim.fn.fnamemodify(path, ":t")
   local current_chapter = nil
+  local current_chapter_index = nil
+
+  local function ensure_implicit_chapter()
+    if not current_chapter then
+      current_chapter = {
+        title = implicit_title,
+        lines = {},
+      }
+      table.insert(book.chapters, current_chapter)
+      current_chapter_index = #book.chapters
+    end
+    return current_chapter_index
+  end
+
   for _, line in ipairs(all_lines) do
     -- [Lua概念] string.match 可以有多个捕获组，返回多个值。
     -- "^(#+)%s+(.+)$" 解读：
@@ -73,10 +73,14 @@ function M.parse(path)
       -- 但 # 号都是 ASCII 字符，所以字节数 = 字符数。
       -- 注意：对中文用 # 得到的是字节数（每个中文字 3 字节 UTF-8），不是字符数。
       local heading_level = #level
+      if heading_level > 1 and not current_chapter then
+        ensure_implicit_chapter()
+      end
+      local toc_index = current_chapter and current_chapter_index or (#book.chapters + 1)
       table.insert(book.toc, {
         title = title,
         level = heading_level,
-        index = #book.chapters + 1,
+        index = toc_index,
       })
       if heading_level == 1 then
         -- 只有一级标题 (#) 才创建新章节
@@ -85,12 +89,14 @@ function M.parse(path)
           lines = {},
         }
         table.insert(book.chapters, current_chapter)
-        book.toc[#book.toc].index = #book.chapters
+        current_chapter_index = #book.chapters
+        book.toc[#book.toc].index = current_chapter_index
       elseif current_chapter then
         -- 二级及以下标题作为内容行保留在当前章节中
         table.insert(current_chapter.lines, line)
       end
-    elseif current_chapter and line ~= "" then
+    elseif line ~= "" then
+      ensure_implicit_chapter()
       table.insert(current_chapter.lines, line)
     end
   end

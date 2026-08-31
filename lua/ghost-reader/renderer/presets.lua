@@ -1,28 +1,5 @@
---[[
-  stealth/presets.lua - 假代码预设模板
-
-  角色：包含多套假代码模板（Go/Python/TSX/Lua/Rust）。
-  当老板键触发时，从中选取一套显示在屏幕上，伪装成正在写代码。
-
-  本文件80%以上是假代码数据，只有少量逻辑代码。
-  假代码内容不需要逐行阅读，关注下方的 get/list/add 函数即可。
-
-  本文件涉及的关键概念：
-  - [Lua概念] 大型表字面量（模拟对象结构）
-  - [Neovim API] vim.tbl_extend 表合并
-  - [Lua概念] math.random 随机数
-  - [Lua概念] pairs vs ipairs（遍历字典 vs 遍历数组）
-  - [Lua概念] _ 变量占位符
-
-  关联模块：被 stealth/init.lua 调用。
-]]
-
 local M = {}
 
--- 内置的假代码预设。每个预设是一个表，包含：
---   filetype = 文件类型（控制语法高亮）
---   path = 假的文件路径（显示在状态栏）
---   lines = 假代码的行数组
 local builtins = {
   go_api = {
     filetype = "go",
@@ -54,7 +31,7 @@ local builtins = {
       '    if token == "" {',
       '      http.Error(w, "unauthorized", http.StatusUnauthorized)',
       "      return",
-      "    }",
+      "    end",
       "    claims, err := a.parseToken(token)",
       "    if err != nil {",
       '      log.Printf("auth error: %v", err)',
@@ -218,24 +195,17 @@ local builtins = {
   },
 }
 
--- 用户自定义预设的存储表
 local custom_presets = {}
 
--- 根据名称获取预设
 function M.get(name)
   if name == "random" then
-    -- [Lua概念] math.random(n) 返回 1 到 n 的随机整数。
     local names = M.list()
     local key = names[math.random(#names)]
     local src = builtins[key] or custom_presets[key]
-    -- [Neovim API] vim.tbl_extend("force", t1, t2) 合并两个表。
-    -- "force" 策略：t2 的值覆盖 t1 的同名键。
-    -- 其他策略："keep"（不覆盖）、"error"（重复键报错）。
     return vim.tbl_extend("force", src, { name = key })
   end
   local src = builtins[name] or custom_presets[name]
   if not src then
-    -- 未找到指定名称，使用第一个内置预设作为兜底
     local names = M.list()
     local fallback = names[1]
     src = builtins[fallback]
@@ -243,18 +213,17 @@ function M.get(name)
   return vim.tbl_extend("force", src, { name = name })
 end
 
--- 列出所有预设的名称
 function M.list()
   local names = {}
-  -- [Lua概念] pairs(t) 遍历所有键值对（包括非整数键），顺序不确定。
-  -- 与 ipairs 不同：ipairs 只遍历整数索引 1,2,3,...，pairs 遍历所有键。
-  -- [Lua概念] _ 是"占位变量"，Lua 惯用法：不需要用的值赋给 _（类似 Go 的 _）。
-  for k, _ in pairs(builtins) do table.insert(names, k) end
-  for k, _ in pairs(custom_presets) do table.insert(names, k) end
+  for k, _ in pairs(builtins) do
+    table.insert(names, k)
+  end
+  for k, _ in pairs(custom_presets) do
+    table.insert(names, k)
+  end
   return names
 end
 
--- 添加用户自定义预设
 function M.add(name, preset)
   custom_presets[name] = preset
 end

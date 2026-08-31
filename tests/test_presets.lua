@@ -1,4 +1,4 @@
-local presets = require("ghost-reader.stealth.presets")
+local presets = require("ghost-reader.renderer.presets")
 
 describe("presets", function()
   it("returns a preset by name", function()

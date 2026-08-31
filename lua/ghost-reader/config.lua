@@ -1,83 +1,223 @@
---[[
-  config.lua - 配置管理模块
-
-  角色：定义插件的默认配置，并提供 deep_merge 函数将用户自定义配置合并到默认值上。
-
-  本文件涉及的关键概念：
-  - [Lua概念] 嵌套表（Lua 的表可以无限嵌套，模拟"对象"结构）
-  - [Lua概念] pairs() 迭代器（遍历表的所有键值对）
-  - [Lua概念] type() 函数（检查值的类型）
-  - [Neovim API] vim.deepcopy（深拷贝表）
-  - [Neovim API] vim.fn.stdpath（获取 Neovim 标准目录路径）
-
-  关联模块：被 init.lua 调用来初始化插件配置。
-]]
-
--- 回忆：local M = {} 是 Lua 的模块模式（详见 utils.lua）
 local M = {}
 
--- [Lua概念] 嵌套表：Lua 的表（table）是唯一的数据结构，
--- 既可以当数组用，也可以当字典/对象用。这里用表来定义配置项。
--- 字符串键可以用点号语法访问：defaults.boss_key.keys
 local defaults = {
-  boss_key = {
-    keys = "<Esc><Esc>",       -- 老板键快捷键
-    use_current_buffer = true,  -- 是否用当前 buffer 的内容作为伪装
-    preset = "random",          -- 伪装代码的预设名称，"random" 表示随机选取
-  },
-  keymaps = {
-    next_page = "J",            -- 下一页
-    prev_page = "K",            -- 上一页
-    next_chapter = "]c",        -- 下一章
-    prev_chapter = "[c",        -- 上一章
-    toc = "<leader>gt",         -- 打开目录
-    progress = "gp",            -- 显示阅读进度
-    boss_key = "<Esc><Esc>",    -- 老板键
+  reader = {
+    renderer = "overlay",
+    visible_blocks = 3,
+    mirror_fallback = true,
   },
   statusline = {
-    interval = 3000,            -- 状态栏模式自动翻行间隔（毫秒）
-    mode = "auto",              -- "auto" = 自动翻行，"manual" = 手动翻行
+    interval = 3000,
+    autoplay = true,
+    page_step = 5,
   },
-  cache_dir = nil,              -- 缓存目录，nil 表示自动生成
-  data_dir = nil,               -- 数据目录，nil 表示自动生成
+  stealth = {
+    hide_on_focus_lost = true,
+    silent = true,
+    overlay = {
+      hide_on_insert = true,
+      hide_on_buf_leave = true,
+      hide_on_win_leave = true,
+    },
+  },
+  paths = {},
+  keymaps = {
+    global = {
+      open = "<leader>rr",
+      statusline = "<leader>rs",
+      control = "<leader>rm",
+      hide = "<leader>rh",
+      toc = "<leader>rt",
+      close = "<leader>rq",
+    },
+    controls = {
+      next_content = "j",
+      prev_content = "k",
+      next_page = "<C-f>",
+      prev_page = "<C-b>",
+      next_chapter = "]]",
+      prev_chapter = "[[",
+      toc = "t",
+      progress = "g%",
+      hide = "gh",
+      close = "q",
+      help = "?",
+      exit_controls = "<Esc>",
+    },
+    statusline = {
+      toggle_auto = "a",
+      faster = "+",
+      slower = "-",
+    },
+  },
 }
 
--- [Lua概念] local function 表示函数只在当前文件可见（私有函数）。
--- 这是一个递归函数：对于嵌套的表，会递归地合并内层表。
+local function is_positive_integer(value)
+  return type(value) == "number" and value > 0 and value % 1 == 0
+end
+
+local function validate_value(value, expected, path)
+  if expected == "string" then
+    if type(value) ~= "string" then
+      error("invalid config value at " .. path .. ": expected string")
+    end
+    return
+  end
+
+  if expected == "boolean" then
+    if type(value) ~= "boolean" then
+      error("invalid config value at " .. path .. ": expected boolean")
+    end
+    return
+  end
+
+  if expected == "positive_integer" then
+    if not is_positive_integer(value) then
+      error("invalid config value at " .. path .. ": expected positive integer")
+    end
+    return
+  end
+
+  if expected == "renderer" then
+    if value ~= "overlay" and value ~= "mirror" then
+      error("invalid config value at " .. path .. ": expected overlay or mirror")
+    end
+    return
+  end
+
+  if expected == "mapping" then
+    if not (type(value) == "string" or value == false) then
+      error("invalid config value at " .. path .. ": expected string or false")
+    end
+    return
+  end
+
+  error("unknown validator for " .. path)
+end
+
+local function validate_known_keys(user_config, default_config, prefix)
+  if type(user_config) ~= "table" then
+    return
+  end
+
+  for key, value in pairs(user_config) do
+    local current_path = prefix and (prefix .. "." .. key) or key
+    local default_value = default_config[key]
+    if default_value == nil and not (prefix == "paths" and (key == "cache_dir" or key == "data_dir")) then
+      error("unknown config key: " .. current_path)
+    end
+    if type(value) == "table" and type(default_value) == "table" then
+      validate_known_keys(value, default_value, current_path)
+    end
+  end
+end
+
+local function validate_schema(user_config)
+  if type(user_config) ~= "table" then
+    return
+  end
+
+  validate_known_keys(user_config, defaults, nil)
+
+  if user_config.reader ~= nil and type(user_config.reader) ~= "table" then
+    error("invalid config value at reader: expected table")
+  end
+  local reader = user_config.reader or {}
+  if reader.renderer ~= nil then
+    validate_value(reader.renderer, "renderer", "reader.renderer")
+  end
+  if reader.visible_blocks ~= nil then
+    validate_value(reader.visible_blocks, "positive_integer", "reader.visible_blocks")
+  end
+  if reader.mirror_fallback ~= nil then
+    validate_value(reader.mirror_fallback, "boolean", "reader.mirror_fallback")
+  end
+
+  if user_config.statusline ~= nil and type(user_config.statusline) ~= "table" then
+    error("invalid config value at statusline: expected table")
+  end
+  local statusline = user_config.statusline or {}
+  if statusline.interval ~= nil then
+    validate_value(statusline.interval, "positive_integer", "statusline.interval")
+  end
+  if statusline.autoplay ~= nil then
+    validate_value(statusline.autoplay, "boolean", "statusline.autoplay")
+  end
+  if statusline.page_step ~= nil then
+    validate_value(statusline.page_step, "positive_integer", "statusline.page_step")
+  end
+
+  if user_config.stealth ~= nil and type(user_config.stealth) ~= "table" then
+    error("invalid config value at stealth: expected table")
+  end
+  local stealth = user_config.stealth or {}
+  if stealth.hide_on_focus_lost ~= nil then
+    validate_value(stealth.hide_on_focus_lost, "boolean", "stealth.hide_on_focus_lost")
+  end
+  if stealth.silent ~= nil then
+    validate_value(stealth.silent, "boolean", "stealth.silent")
+  end
+  if stealth.overlay ~= nil and type(stealth.overlay) ~= "table" then
+    error("invalid config value at stealth.overlay: expected table")
+  end
+  local overlay = stealth.overlay or {}
+  if overlay.hide_on_insert ~= nil then
+    validate_value(overlay.hide_on_insert, "boolean", "stealth.overlay.hide_on_insert")
+  end
+  if overlay.hide_on_buf_leave ~= nil then
+    validate_value(overlay.hide_on_buf_leave, "boolean", "stealth.overlay.hide_on_buf_leave")
+  end
+  if overlay.hide_on_win_leave ~= nil then
+    validate_value(overlay.hide_on_win_leave, "boolean", "stealth.overlay.hide_on_win_leave")
+  end
+
+  if user_config.paths ~= nil and type(user_config.paths) ~= "table" then
+    error("invalid config value at paths: expected table")
+  end
+  local paths = user_config.paths or {}
+  if paths.cache_dir ~= nil then
+    validate_value(paths.cache_dir, "string", "paths.cache_dir")
+  end
+  if paths.data_dir ~= nil then
+    validate_value(paths.data_dir, "string", "paths.data_dir")
+  end
+
+  if user_config.keymaps ~= nil and type(user_config.keymaps) ~= "table" then
+    error("invalid config value at keymaps: expected table")
+  end
+  local keymaps = user_config.keymaps or {}
+  for _, section in ipairs({ "global", "controls", "statusline" }) do
+    if keymaps[section] ~= nil and type(keymaps[section]) ~= "table" then
+      error("invalid config value at keymaps." .. section .. ": expected table")
+    end
+    local section_values = keymaps[section] or {}
+    local defaults_values = defaults.keymaps[section] or {}
+    for key, value in pairs(section_values) do
+      if defaults_values[key] == nil then
+        error("unknown config key: keymaps." .. section .. "." .. key)
+      end
+      validate_value(value, "mapping", "keymaps." .. section .. "." .. key)
+    end
+  end
+end
+
 local function deep_merge(base, override)
-  -- [Neovim API] vim.deepcopy 创建表的深拷贝（完全独立的副本）。
-  -- 必须拷贝，不能直接修改 base，因为 defaults 是共享的模块级变量。
   local result = vim.deepcopy(base)
-  -- [Lua概念] pairs(t) 遍历表的所有键值对（顺序不确定）。
-  -- 与 ipairs 不同：ipairs 只遍历整数索引（数组），pairs 遍历所有键。
-  -- [Lua概念] "override or {}" 是 Lua 的"默认值惯用法"：
-  --   如果 override 是 nil，则 or 会取后面的 {}（空表）。
   for k, v in pairs(override or {}) do
-    -- [Lua概念] type(v) 返回值的类型字符串： "table"、"string"、"number"、"nil" 等。
-    -- Lua 中表（table）是唯一的复合类型——没有数组、字典、对象的区别，都是 table。
     if type(v) == "table" and type(result[k]) == "table" then
-      -- 两边都是表，递归合并内层
       result[k] = deep_merge(result[k], v)
     else
-      -- 直接用用户的值覆盖默认值
       result[k] = v
     end
   end
   return result
 end
 
--- setup() 是 Neovim 插件的标准入口函数。
--- 用户在 config 中写：require("ghost-reader").setup({ ... })
 function M.setup(user_config)
+  validate_schema(user_config)
   local cfg = deep_merge(defaults, user_config)
-  -- [Neovim API] vim.fn.stdpath("cache") 返回 Neovim 的缓存目录路径（如 ~/.cache/nvim）。
-  -- vim.fn.stdpath("data") 返回数据目录路径（如 ~/.local/share/nvim）。
-  if not cfg.cache_dir then
-    cfg.cache_dir = vim.fn.stdpath("cache") .. "/ghost-reader/"
-  end
-  if not cfg.data_dir then
-    cfg.data_dir = vim.fn.stdpath("data") .. "/ghost-reader/"
-  end
+  cfg.paths.cache_dir = cfg.paths.cache_dir or (vim.fn.stdpath("cache") .. "/ghost-reader/")
+  cfg.paths.data_dir = cfg.paths.data_dir or (vim.fn.stdpath("data") .. "/ghost-reader/")
   return cfg
 end
 

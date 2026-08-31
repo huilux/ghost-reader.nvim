@@ -130,14 +130,53 @@ describe("renderer.statusline", function()
     assert.is_true(renderer.toggle_auto(ctx))
   end)
 
+  it("re-arms autoplay using the stored interval and ignores replacement sessions", function()
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    local dispatches = 0
+    local live_generation = 7
+    package.loaded["ghost-reader.session"] = {
+      get = function()
+        return { generation = live_generation, visibility = "VISIBLE" }
+      end,
+    }
+    package.loaded["ghost-reader.actions"] = {
+      next_content = function()
+        dispatches = dispatches + 1
+        return true
+      end,
+    }
+    vim.uv.new_timer = function()
+      return timer
+    end
+
+    ctx.config.statusline.interval = 750
+    assert.is_true(renderer.render(ctx, { blocks = { { text = "hello", active = true } } }))
+    assert.equal(750, timer.starts[1].interval)
+    ctx.view_state.statusline.interval = 500
+    renderer.faster(ctx)
+    assert.equal(500, timer.starts[#timer.starts].interval)
+
+    live_generation = 8
+    timer.callback()
+    assert.equal(0, dispatches)
+  end)
+
   it("does not rearm autoplay for stale generations or end of book", function()
     local renderer = fresh_renderer()
     local ctx = make_context()
     local timer = make_timer_stub()
     local dispatches = 0
+    local generation = ctx.generation
     vim.uv.new_timer = function()
       return timer
     end
+    package.loaded["ghost-reader.session"] = {
+      get = function()
+        return { generation = generation, visibility = "VISIBLE" }
+      end,
+    }
     package.loaded["ghost-reader.actions"] = {
       next_content = function()
         dispatches = dispatches + 1
@@ -148,7 +187,7 @@ describe("renderer.statusline", function()
     assert.is_true(renderer.render(ctx, { blocks = { { text = "hello", active = true } } }))
     assert.is_not_nil(timer.callback)
 
-    ctx.generation = ctx.generation + 1
+    generation = generation + 1
     timer.callback()
     assert.is_truthy(vim.wait(100, function()
       return timer.closed == 1
@@ -157,7 +196,7 @@ describe("renderer.statusline", function()
     assert.is_equal(1, timer.stopped)
     assert.is_equal(1, timer.closed)
 
-    ctx.generation = 7
+    generation = ctx.generation
     dispatches = 0
     timer = make_timer_stub()
     vim.uv.new_timer = function()

@@ -19,7 +19,7 @@ Vim/Neovim 中有三个核心概念，初学者经常混淆：
 - 关闭一个 Window 不等于关闭它显示的 Buffer。
 - Buffer 可以"隐藏"（不显示在任何 Window 中）但仍然存在。
 
-本插件大量操作 Buffer：创建新的 Buffer 来显示书籍内容，切换 Buffer 来触发老板键等。
+本插件大量操作 Buffer：创建新的 Buffer 来显示书籍内容，并通过控制层与隐藏行为切换阅读状态。
 
 ---
 
@@ -65,7 +65,7 @@ vim.keymap.set("n", "J", action, { buffer = buf })
 ```
 
 `{ buffer = bufnr }` 使映射仅在特定 Buffer 中生效。当该 Buffer 被删除时，映射自动清理。
-本插件使用此机制：阅读 Buffer 中的 `J`/`K` 键只在阅读时有效。
+本插件使用此机制：阅读 Buffer 中的 `j`/`k`、`<C-f>`/`<C-b>` 和相关控制键只在阅读时有效。
 
 ### Leader Key
 
@@ -76,7 +76,7 @@ vim.g.mapleader = " "   -- 设空格为 Leader 键
 vim.keymap.set("n", "<leader>ff", action)  -- 实际按键：空格+f+f
 ```
 
-`<leader>` 在映射字符串中会被替换为实际的 Leader 键值。如果你的 Leader 是空格，`<leader>gt` 就是 `空格+g+t`。
+`<leader>` 在映射字符串中会被替换为实际的 Leader 键值。如果你的 Leader 是空格，`<leader>ff` 就是 `空格+f+f`。
 
 ---
 

@@ -19,9 +19,8 @@
 local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
-local reader = require("ghost-reader.reader")
+local session = require("ghost-reader.session")
 local history = require("ghost-reader.history")
-local reader_statusline = require("ghost-reader.reader.statusline")
 
 -- [Lua概念] M.config = nil 表示"尚未初始化"。
 -- 第一次调用 M.setup() 时才会被赋值。
@@ -42,7 +41,7 @@ end
 function M.open(path)
   -- [Lua概念] 懒初始化：如果还没调用 setup()，先用默认配置初始化。
   if not M.config then M.setup() end
-  local ok = reader.open(path, M.config)
+  local ok = session.open({ path = path, config = M.config, mode = "overlay" })
   if ok then
     -- 记录到历史
     history.record(path, M.config)
@@ -51,45 +50,17 @@ end
 
 -- 关闭阅读模式
 function M.close()
-  reader.close()
+  session.stop()
 end
 
 -- 显示目录（在当前阅读的书中跳转章节）
 function M.toc()
-  local reader = require("ghost-reader.reader")
-  if not reader.state then return end
-  local book = reader.state.book
-  local items = {}
-  for _, entry in ipairs(book.toc) do
-    table.insert(items, entry.title)
-  end
-  -- 回忆：vim.ui.select 显示选择对话框（见 reader/init.lua 中的详细说明）
-  vim.ui.select(items, { prompt = "Table of Contents:" }, function(_, idx)
-    if idx then reader.go_to_chapter(idx) end
-  end)
+  session.toc()
 end
 
 -- 智能选择书籍：根据当前状态决定下一步操作
 function M.select_book()
   if not M.config then M.setup() end
-
-  -- 情况1：状态栏模式被老板键隐藏了 → 恢复它
-  if reader_statusline.state and reader_statusline._hidden then
-    reader_statusline.restore()
-    return
-  end
-
-  -- 情况2：全屏模式的 Buffer 存在（可能在后台）→ 切回它
-  if reader.state and vim.api.nvim_buf_is_valid(reader.state.buf) then
-    reader.state.prev_buf = vim.api.nvim_get_current_buf()
-    vim.api.nvim_set_current_buf(reader.state.buf)
-    return
-  end
-
-  -- 情况3：状态栏模式正在运行 → 不需要操作
-  if reader_statusline.state then
-    return
-  end
 
   -- 情况4：没有任何阅读状态 → 从历史中选择一本书或输入新路径
   local entries = history.load(M.config)
@@ -119,14 +90,10 @@ function M.select_book()
       return
     end
     -- 选择阅读模式
-    local mode_items = { "sparse_notes (全屏)", "statusline (状态栏)" }
+    local mode_items = { "overlay", "statusline", "mirror" }
     vim.ui.select(mode_items, { prompt = "Reading mode:" }, function(_, mode_idx)
-      if not mode_idx then M.open(path); return end
-      if mode_idx == 1 then
-        M.open(path)
-      else
-        reader_statusline.start(path, M.config)
-      end
+      local mode = mode_items[mode_idx or 1] or "overlay"
+      session.open({ path = path, config = M.config, mode = mode })
     end)
   end)
 end

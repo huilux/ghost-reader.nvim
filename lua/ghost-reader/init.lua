@@ -33,8 +33,8 @@ function M.setup(user_config)
   -- 调用 config.setup 合并默认值和用户自定义值
   M.config = config.setup(user_config or {})
   -- 确保缓存和数据目录存在
-  utils.ensure_dir(M.config.cache_dir)
-  utils.ensure_dir(M.config.data_dir)
+  utils.ensure_dir(M.config.paths.cache_dir)
+  utils.ensure_dir(M.config.paths.data_dir)
   return M.config
 end
 

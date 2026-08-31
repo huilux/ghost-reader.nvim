@@ -9,6 +9,8 @@ describe("config", function()
     assert.equal("gh", cfg.keymaps.controls.hide)
     assert.equal("<Esc>", cfg.keymaps.controls.exit_controls)
     assert.is_truthy(cfg.paths.cache_dir:match("ghost%-reader/$"))
+    assert.is_nil(cfg.cache_dir)
+    assert.is_nil(cfg.data_dir)
   end)
 
   it("rejects legacy keys", function()

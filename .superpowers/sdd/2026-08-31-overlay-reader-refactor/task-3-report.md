@@ -32,3 +32,8 @@ Fix note:
 - Replaced startup notifications with generic messages that do not expose book title or path.
 - Split missing vs unreadable file errors using `vim.uv.fs_stat()` before open attempts.
 - Added a compatibility alias for `config.cache_dir` / `config.data_dir` so the existing progress/history code keeps working while the config surface stays normalized under `paths`.
+
+Round 2 note:
+
+- Removed the temporary top-level config aliases and updated `init.lua`, `history.lua`, and `reader/progress.lua` to read `config.paths.cache_dir` and `config.paths.data_dir` directly.
+- Added a config test asserting the top-level aliases are absent.

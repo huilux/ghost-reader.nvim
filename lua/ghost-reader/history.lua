@@ -20,7 +20,7 @@ local utils = require("ghost-reader.utils")
 
 -- 构建历史文件的保存路径
 local function history_path(config)
-  local dir = config.data_dir .. "data/"
+  local dir = config.paths.data_dir .. "data/"
   -- 回忆：ensure_dir 在目录不存在时自动创建（见 utils.lua）
   utils.ensure_dir(dir)
   return dir .. "history.json"

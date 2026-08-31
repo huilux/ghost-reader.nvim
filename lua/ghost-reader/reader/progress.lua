@@ -18,7 +18,7 @@ local utils = require("ghost-reader.utils")
 -- 保存当前阅读进度到 JSON 文件
 function M.save(book, state, config)
   local book_hash = utils.file_hash(book.path) or "unknown"
-  local data_dir = config.data_dir .. "data/"
+  local data_dir = config.paths.data_dir .. "data/"
   utils.ensure_dir(data_dir)
   local path = data_dir .. book_hash .. ".json"
 
@@ -37,7 +37,7 @@ end
 -- 加载之前保存的阅读进度
 function M.load(book, config)
   local book_hash = utils.file_hash(book.path) or "unknown"
-  local data_dir = config.data_dir .. "data/"
+  local data_dir = config.paths.data_dir .. "data/"
   local path = data_dir .. book_hash .. ".json"
 
   local f = io.open(path, "r")

@@ -113,7 +113,9 @@ local function save_view(ctx)
     mirror.saved = {
       buf = ctx.target_buf,
       win = ctx.target_win,
-      view = vim.fn.winsaveview(),
+      view = vim.api.nvim_win_call(ctx.target_win, function()
+        return vim.fn.winsaveview()
+      end),
     }
   end
 end
@@ -125,8 +127,10 @@ local function restore_saved_view(ctx)
     return true
   end
   if vim.api.nvim_win_is_valid(saved.win) and vim.api.nvim_buf_is_valid(saved.buf) then
-    vim.api.nvim_win_set_buf(saved.win, saved.buf)
-    vim.fn.winrestview(saved.view)
+    vim.api.nvim_win_call(saved.win, function()
+      vim.api.nvim_win_set_buf(saved.win, saved.buf)
+      vim.fn.winrestview(saved.view)
+    end)
   end
   return true
 end

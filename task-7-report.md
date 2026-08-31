@@ -32,3 +32,4 @@ Notes:
 
 - I left the legacy renderer and stealth preset files untouched, per the brief’s Task 10 boundary.
 - The working tree still contains the generated `nvim.log`, which I did not include in the commit.
+- Fix round 1: view save/restore now explicitly runs in the target window context, and I added a regression test that restores cursor, topline, leftcol, and buffer state from a non-current target window.

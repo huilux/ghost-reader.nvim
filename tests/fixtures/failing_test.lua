@@ -1,0 +1,5 @@
+describe("test runner sentinel", function()
+  it("fails intentionally", function()
+    assert.is_true(false)
+  end)
+end)

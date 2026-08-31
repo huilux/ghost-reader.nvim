@@ -3,6 +3,7 @@ local M = {}
 local bookshelf = require("ghost-reader.bookshelf")
 local navigate = require("ghost-reader.reader.navigate")
 local progress = require("ghost-reader.reader.progress")
+local history = require("ghost-reader.history")
 local renderer = require("ghost-reader.renderer")
 local keymaps = require("ghost-reader.keymaps")
 local utils = require("ghost-reader.utils")
@@ -47,8 +48,13 @@ local function set_state(new_state)
   end
 end
 
-local function segment_count()
-  return 1
+local function segment_count(chapter_index, line_index)
+  if not active or not active.renderer.segment_count then
+    return 1
+  end
+  local chapter = active.book.chapters[chapter_index] or { lines = {} }
+  local text = chapter.lines[line_index] or ""
+  return math.max(1, tonumber(active.renderer.segment_count(active.ctx, text)) or 1)
 end
 
 local function frame_for(pos)
@@ -60,12 +66,16 @@ local function frame_for(pos)
   for i, item in ipairs(peek) do
     local chapter_item = active.book.chapters[item.chapter_index] or { lines = {} }
     local line = chapter_item.lines[item.line_index] or ""
+    local segment_text = line
+    if active.renderer.segment_text then
+      segment_text = active.renderer.segment_text(active.ctx, line, item.segment_index) or line
+    end
     blocks[#blocks + 1] = {
       index = i,
       chapter_index = item.chapter_index,
       line_index = item.line_index,
       segment_index = item.segment_index,
-      text = line,
+      text = segment_text,
       active = i == 1,
     }
   end
@@ -110,6 +120,7 @@ local function setup_autocmds()
   local function autocmd(events, callback)
     vim.api.nvim_create_autocmd(events, {
       group = active.autocmd_group,
+      buffer = active.control_buf,
       callback = callback,
     })
   end
@@ -202,6 +213,7 @@ local function open_book(path, mode)
   end
   setup_autocmds()
   render_current()
+  history.record(book.path, cfg)
   if active.controls == "ACTIVE" then
     keymaps.enter_controls(active, cfg)
   end

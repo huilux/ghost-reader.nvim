@@ -29,15 +29,24 @@ function M.create(ctx, name)
       if ctx.config and ctx.config.reader and ctx.config.reader.mirror_fallback ~= false then
         ctx.mode = "overlay"
         ctx.view_name = "mirror"
+        if M.mirror.start(ctx) == false then
+          return nil
+        end
         return M.mirror
       end
     end
     ctx.mode = "overlay"
     ctx.view_name = "overlay"
+    if renderer.start and renderer.start(ctx) == false then
+      return nil
+    end
     return renderer
   end
   ctx.mode = requested
   ctx.view_name = requested
+  if renderer.start and renderer.start(ctx) == false then
+    return nil
+  end
   return renderer
 end
 
@@ -46,6 +55,9 @@ function M.render(mode, ctx, frame)
     return M.legacy.render(mode)
   end
   local renderer = M.create(ctx, mode)
+  if not renderer then
+    return false
+  end
   local ok = renderer.render(ctx, frame)
   if ok == false then
     return false

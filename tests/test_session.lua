@@ -83,6 +83,37 @@ describe("session", function()
     session.stop()
   end)
 
+  it("records history only after a successful start", function()
+    local history_calls = {}
+    package.loaded["ghost-reader.history"] = {
+      record = function(path)
+        history_calls[#history_calls + 1] = path
+      end,
+    }
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local good_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "alpha" }, good_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(good_path, "overlay"))
+    assert.same({ good_path }, history_calls)
+    session.stop()
+  end)
+
   it("hard hide leaves controls before hiding and restore re-enters them for overlay", function()
     local events = {}
     package.loaded["ghost-reader.bookshelf"] = {
@@ -107,12 +138,13 @@ describe("session", function()
 
     session.configure(cfg)
     assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
-    assert.is_true(session.toggle_controls())
+    assert.equal("ACTIVE", session.get().controls)
     assert.is_true(session.hide("hard"))
-    assert.same({ "leave", "enter", "leave" }, events)
+    assert.equal("INACTIVE", session.get().controls)
+    assert.same({ "enter", "leave" }, events)
     assert.is_true(session.restore())
     assert.equal("ACTIVE", session.get().controls)
-    assert.same({ "leave", "enter", "leave", "leave", "enter" }, events)
+    assert.same({ "enter", "leave", "leave", "enter" }, events)
     session.stop()
   end)
 
@@ -154,6 +186,43 @@ describe("session", function()
     assert.is_true(session.dispatch("faster"))
     assert.is_true(session.dispatch("slower"))
     assert.same({ "toggle", "faster", "slower" }, calls)
+    session.stop()
+  end)
+
+  it("exposes the active renderer segment callbacks in frame rendering", function()
+    local segment_calls = { count = 0, text = 0 }
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = {
+            { title = "One", lines = { "alpha", "beta" } },
+          },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer.overlay"] = {
+      supports = function() return true end,
+      start = function() return true end,
+      render = function() return true end,
+      hide = function() return true end,
+      restore = function() return true end,
+      stop = function() return true end,
+      page_size = function() return 2 end,
+      segment_count = function(_, text) segment_calls.count = segment_calls.count + 1; return #text end,
+      segment_text = function(_, text, idx) segment_calls.text = segment_calls.text + 1; return string.sub(text, idx, idx) end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_truthy(segment_calls.count > 0)
+    assert.is_truthy(segment_calls.text > 0)
     session.stop()
   end)
 end)

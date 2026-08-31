@@ -23,3 +23,4 @@ Notes:
 - Fix pass: session API now exposes `configure`, `start`, `get`, `hide`, `stop`, `dispatch`, and `_reset_for_tests`, and the integration coverage now exercises mirror fallback plus controlled navigation fixtures.
 - Fix pass 2: public callers now use the string `path + mode` start contract, renderer errors say `unknown reader view: ...`, and transactional start leaves the active session untouched if replacement parsing fails.
 - Fix pass 3: hard hide now leaves controls before hiding, overlay restore re-enters controls, statusline BufLeave exits controls without hiding, and the session/integration tests now cover autocmd-triggered transitions plus statusline renderer actions.
+- Fix pass 4: renderer creation now propagates start failures, overlay fallback initializes mirror exactly once, TOC navigation uses the selected entry index, frame building exercises segment callbacks, and the full test suite passes with `make test-all`.

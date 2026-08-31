@@ -159,4 +159,46 @@ describe("session integration", function()
     assert.equal("INACTIVE", session.get().controls)
     session.stop()
   end)
+
+  it("triggers target-scoped autocmds on the current buffer only", function()
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local first = helpers.new_normal_buffer({ "one" })
+    local second = helpers.new_normal_buffer({ "two" })
+    vim.api.nvim_set_current_buf(first)
+    package.loaded["ghost-reader.renderer.overlay"] = {
+      supports = function() return true end,
+      start = function() return true end,
+      render = function() return true end,
+      hide = function() return true end,
+      restore = function() return true end,
+      stop = function() return true end,
+      page_size = function() return 1 end,
+      segment_count = function() return 1 end,
+      segment_text = function(_, text) return text end,
+    }
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a", "b" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = nil
+    package.loaded["ghost-reader.session"] = nil
+    local session = require("ghost-reader.session")
+
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    vim.api.nvim_exec_autocmds("BufLeave", { buffer = second })
+    assert.equal("VISIBLE", session.get().visibility)
+    vim.api.nvim_exec_autocmds("BufLeave", { buffer = first })
+    assert.equal("HARD_HIDDEN", session.get().visibility)
+    session.stop()
+  end)
 end)

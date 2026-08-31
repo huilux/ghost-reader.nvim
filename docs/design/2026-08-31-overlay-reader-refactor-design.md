@@ -70,9 +70,10 @@ Shared actions use the same keys whenever the reading control layer is active:
 | `prev_chapter` | `[[` | Go to the previous chapter |
 | `toc` | `t` | Open the table of contents |
 | `progress` | `g%` | Show reading progress without including the book title |
-| `hide` | `<Esc><Esc>` | Hard-hide the active session |
+| `hide` | `gh` | Hard-hide the active session |
 | `close` | `q` | Close the active session and save progress |
 | `help` | `?` | Show the active control bindings |
+| `exit_controls` | `<Esc>` | Leave controls and restore ordinary mappings |
 
 Statusline adds three actions while the same control layer is active:
 
@@ -116,7 +117,7 @@ The command set becomes:
 
 Overlay and mirror enter the reading control layer when started. Statusline does not take over ordinary editing keys until the user runs `GhostReaderControl` or presses `<leader>rm`.
 
-Pressing a single `<Esc>` exits the control layer without closing the session. The overlay can remain visible while normal mappings are restored. Entering the control layer again installs the same shared bindings.
+Pressing `<Esc>` exits the control layer without closing the session. The overlay can remain visible while normal mappings are restored. Entering the control layer again installs the same shared bindings. Hard hide uses `gh`; it deliberately does not share an `<Esc>` prefix, so exit and hide never depend on mapping timeout behavior.
 
 The keymap manager snapshots every Buffer-local mapping it replaces with `maparg()` and restores the complete mapping dictionary with `mapset()`. Leaving controls, hard-hiding, closing, or encountering an error restores those exact mappings in the Buffer where they were captured. When no prior mapping existed, cleanup deletes only the plugin mapping. Cleanup never uses `buffer = 0` to guess the target Buffer.
 
@@ -237,9 +238,10 @@ The new configuration is the only supported schema:
       prev_chapter = "[[",
       toc = "t",
       progress = "g%",
-      hide = "<Esc><Esc>",
+      hide = "gh",
       close = "q",
       help = "?",
+      exit_controls = "<Esc>",
     },
     statusline = {
       toggle_auto = "a",

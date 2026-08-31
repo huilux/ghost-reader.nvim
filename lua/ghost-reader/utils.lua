@@ -111,6 +111,52 @@ function M.utf8_next(s, i)
   return s:sub(i, i + len - 1), i + len
 end
 
+function M.wrap_display(text, width)
+  if text == "" then
+    return { "" }
+  end
+  if width <= 0 then
+    return { text }
+  end
+
+  local segments = {}
+  local current = ""
+  local current_width = 0
+  local i = 1
+
+  while i <= #text do
+    local ch, next_i = M.utf8_next(text, i)
+    local ch_width = vim.fn.strwidth(ch)
+
+    if current ~= "" and current_width + ch_width > width then
+      table.insert(segments, current)
+      current = ch
+      current_width = ch_width
+    else
+      current = current .. ch
+      current_width = current_width + ch_width
+    end
+
+    if current_width > width and current == ch then
+      table.insert(segments, current)
+      current = ""
+      current_width = 0
+    end
+
+    i = next_i
+  end
+
+  if current ~= "" then
+    table.insert(segments, current)
+  end
+
+  if #segments == 0 then
+    return { "" }
+  end
+
+  return segments
+end
+
 -- 将光标跳转到指定行并居中显示
 function M.cursor_jump(line)
   vim.api.nvim_win_set_cursor(0, { line, 0 })

@@ -25,6 +25,14 @@ Verification:
 - Clean headless smoke test:
   - `env XDG_CACHE_HOME=/tmp/ghost-reader-final/cache XDG_DATA_HOME=/tmp/ghost-reader-final/data XDG_STATE_HOME=/tmp/ghost-reader-final/state nvim --clean --headless --cmd "set rtp^=/home/ming/workspace/Tools/hidden-reading/.worktrees/overlay-reader-refactor" -c "runtime plugin/ghost-reader.lua" -c "lua require('ghost-reader').setup({ stealth = { silent = true } })" -c "lua assert(vim.fn.exists(':GhostReaderHide') == 2)" -c "qa!"`
 
+Follow-up fixes applied in this pass:
+
+- Soft hide now calls the active renderer hide path so overlay extmarks are cleared without ending the session.
+- Statusline autoplay now keys off the live session generation and uses the stored interval when it re-arms.
+- The public facade now exposes the final helpers expected by the plan, including `select_book`, `toggle_controls`, and `toggle_hide`.
+- Buffer-local keymap capture now ignores inherited global mappings, so user globals survive control-layer enter/leave.
+- The obsolete `renderer.render` registry helper and `lua/ghost-reader/stealth/presets.lua` compatibility file were removed.
+
 Final scan result:
 
 - The stale-name scan from the brief is clean for shipped docs and plugin files.

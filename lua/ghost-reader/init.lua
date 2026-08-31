@@ -6,6 +6,17 @@ local history = require("ghost-reader.history")
 
 M.config = nil
 
+local function choose_mode(default_mode, on_choice)
+  if default_mode then
+    return on_choice(default_mode)
+  end
+  vim.ui.select({ "overlay", "statusline" }, { prompt = "Select mode:" }, function(choice)
+    if choice then
+      on_choice(choice)
+    end
+  end)
+end
+
 local function choose_book(preferred_mode)
   if not M.config then M.setup() end
   local entries = history.load(M.config)
@@ -24,13 +35,17 @@ local function choose_book(preferred_mode)
       vim.ui.input({ prompt = "Book path: ", completion = "file" }, function(input)
         if input and input ~= "" then
           session.configure(M.config)
-          session.start(vim.fn.expand(input), preferred_mode or "overlay")
+          choose_mode(preferred_mode, function(mode)
+            session.start(vim.fn.expand(input), mode)
+          end)
         end
       end)
       return
     end
     session.configure(M.config)
-    session.start(path, preferred_mode or "overlay")
+    choose_mode(preferred_mode, function(mode)
+      session.start(path, mode)
+    end)
   end)
 end
 
@@ -42,6 +57,10 @@ function M.setup(user_config)
   return M.config
 end
 
+function M.select_book(preferred_mode)
+  return choose_book(preferred_mode)
+end
+
 function M.open(path)
   if not M.config then M.setup() end
   local current = session.get()
@@ -49,7 +68,10 @@ function M.open(path)
     if current and current.visibility ~= "IDLE" and current.visibility ~= "VISIBLE" then
       return session.restore()
     end
-    return choose_book("overlay")
+    if current and current.visibility == "VISIBLE" and current.controls ~= "ACTIVE" then
+      return session.toggle_controls()
+    end
+    return choose_book()
   end
   session.configure(M.config)
   session.start(path, "overlay")
@@ -70,6 +92,14 @@ end
 
 function M.toc()
   session.toc()
+end
+
+function M.toggle_controls()
+  return session.toggle_controls()
+end
+
+function M.toggle_hide()
+  return session.toggle_hide()
 end
 
 return M

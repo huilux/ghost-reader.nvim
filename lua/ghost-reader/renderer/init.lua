@@ -49,16 +49,4 @@ function M.create(ctx, name)
   return renderer
 end
 
-function M.render(mode, ctx, frame)
-  local renderer = M.create(ctx, mode)
-  if not renderer then
-    return false
-  end
-  local ok = renderer.render(ctx, frame)
-  if ok == false then
-    return false
-  end
-  return true
-end
-
 return M

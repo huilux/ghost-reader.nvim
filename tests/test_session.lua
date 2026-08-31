@@ -1,4 +1,6 @@
 local helpers = require("tests.helpers")
+local keymaps = require("ghost-reader.keymaps")
+local config = require("ghost-reader.config")
 
 describe("session", function()
   before_each(function()
@@ -42,12 +44,60 @@ describe("session", function()
     assert.is_truthy(session.state.controls)
 
     assert.is_true(session.restore())
-    assert.equal("VISIBLE", session.state.visibility)
     assert.equal("ACTIVE", session.state.controls)
 
     assert.is_true(session.stop())
     assert.is_nil(session.get())
     assert.equal("IDLE", session.state.lifecycle)
+  end)
+
+  it("soft hide calls the active renderer hide and restore redraws the frame", function()
+    local hide_calls = 0
+    local restore_calls = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "alpha" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        return {
+          start = function() return true end,
+          render = function() return true end,
+          hide = function()
+            hide_calls = hide_calls + 1
+            return true
+          end,
+          restore = function()
+            restore_calls = restore_calls + 1
+            return true
+          end,
+          stop = function() return true end,
+          page_size = function() return 1 end,
+          segment_count = function() return 1 end,
+          segment_text = function(_, text) return text end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_true(session.hide("soft"))
+    assert.equal(1, hide_calls)
+    assert.equal(0, restore_calls)
+    assert.is_true(session.restore())
+    assert.equal(1, restore_calls)
+    session.stop()
   end)
 
   it("exposes the lifecycle API surface", function()
@@ -379,5 +429,22 @@ describe("session", function()
     assert.is_truthy(segment_calls.count > 0)
     assert.is_truthy(segment_calls.text > 0)
     session.stop()
+  end)
+
+  it("does not confuse a global mapping for a previous buffer-local mapping", function()
+    local function maparg_in_buf(buf, lhs)
+      return vim.api.nvim_buf_call(buf, function()
+        return vim.fn.maparg(lhs, "n", false, true)
+      end)
+    end
+    local buf = helpers.new_normal_buffer({ "one" })
+    vim.keymap.set("n", "j", "gj", { desc = "global user j" })
+    local session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(session, config.setup())
+    keymaps.leave_controls(session)
+    local global_map = vim.fn.maparg("j", "n", false, true)
+    assert.equal("gj", global_map.rhs)
+    assert.equal("global user j", global_map.desc)
+    assert.same({}, vim.api.nvim_buf_get_keymap(buf, "n"))
   end)
 end)

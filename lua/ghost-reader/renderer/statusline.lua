@@ -34,6 +34,11 @@ local function autoplay_enabled(ctx)
 end
 
 local function current_generation(ctx)
+  local session = require("ghost-reader.session")
+  local active = session.get()
+  if active and active.generation ~= nil then
+    return active.generation
+  end
   return ctx and ctx.generation
 end
 
@@ -147,7 +152,7 @@ local function schedule_autoplay(ctx)
   if not st.visible or not autoplay_enabled(ctx) then
     return
   end
-  local interval = clamp_interval(config(ctx).interval)
+  local interval = clamp_interval(st.interval or config(ctx).interval)
   local gen = current_generation(ctx)
   st.timer = timer_factory()
   st.timer:start(interval, 0, vim.schedule_wrap(function()

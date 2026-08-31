@@ -270,6 +270,9 @@ function M.hide(policy)
   if policy == "soft" then
     active.visibility = "SOFT_HIDDEN"
     active.hidden_policy = "soft"
+    if active.renderer.hide then
+      active.renderer.hide(active.ctx)
+    end
     return true
   end
   if active.controls == "ACTIVE" then

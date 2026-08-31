@@ -13,11 +13,11 @@ function M.statusline()
 end
 
 function M.control()
-  return require("ghost-reader.session").toggle_controls()
+  return require("ghost-reader").toggle_controls()
 end
 
 function M.hide()
-  return require("ghost-reader.session").toggle_hide()
+  return require("ghost-reader").toggle_hide()
 end
 
 function M.toc()

@@ -38,9 +38,13 @@ local function del_map(mode, lhs, opts)
 end
 
 local function capture_map(buf, lhs)
-  return vim.api.nvim_buf_call(buf, function()
-    return vim.fn.maparg(resolve(lhs), "n", false, true)
-  end)
+  local resolved = resolve(lhs)
+  for _, map in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+    if map.lhs == resolved then
+      return map
+    end
+  end
+  return nil
 end
 
 local function restore_capture(buf, lhs, previous)

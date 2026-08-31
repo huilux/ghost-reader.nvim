@@ -14,16 +14,12 @@ vim.g.loaded_ghost_reader = true
 --   nargs = "?" 表示接受 0 或 1 个参数（可选参数）
 --   complete = "file" 启用文件路径补全（按 Tab 自动补全文件名）
 vim.api.nvim_create_user_command("GhostReader", function(opts)
-  -- [Lua概念] 匿名函数：function(opts) ... end 是内联定义的函数。
-  -- [Neovim API] require() 在这里才调用，实现懒加载：
-  -- 只有用户执行 :GhostReader 时，才会加载主模块的代码。
   local gr = require("ghost-reader")
   local path = opts.args
   if path ~= "" then
-    -- [Neovim API] vim.fn.expand(path) 展开路径中的特殊字符（如 ~ → 家目录）
     gr.open(vim.fn.expand(path))
   else
-    gr.select_book()
+    gr.open()
   end
 end, { nargs = "?", complete = "file" })
 
@@ -45,15 +41,11 @@ end, {})
 
 vim.api.nvim_create_user_command("GhostReaderStatusline", function(opts)
   local gr = require("ghost-reader")
-  -- [Lua概念] if not gr.config then gr.setup() end 是懒初始化模式：
-  -- 只在配置还没初始化时才调用 setup()，避免重复初始化。
   if not gr.config then gr.setup() end
   local path = opts.args
   if path ~= "" then
-    local session = require("ghost-reader.session")
-    session.configure(gr.config)
-    session.start(vim.fn.expand(path), "statusline")
+    gr.open_statusline(vim.fn.expand(path))
   else
-    gr.select_book()
+    gr.open_statusline()
   end
 end, { nargs = "?", complete = "file" })

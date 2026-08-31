@@ -3,7 +3,6 @@ local M = {}
 M.overlay = require("ghost-reader.renderer.overlay")
 M.mirror = require("ghost-reader.renderer.mirror")
 M.statusline = require("ghost-reader.renderer.statusline")
-M.legacy = require("ghost-reader.renderer.sparse_notes")
 
 local renderers = {
   overlay = M.overlay,
@@ -51,9 +50,6 @@ function M.create(ctx, name)
 end
 
 function M.render(mode, ctx, frame)
-  if type(mode) == "table" and ctx == nil then
-    return M.legacy.render(mode)
-  end
   local renderer = M.create(ctx, mode)
   if not renderer then
     return false

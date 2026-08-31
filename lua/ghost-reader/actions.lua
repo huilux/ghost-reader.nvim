@@ -5,11 +5,11 @@ local function dispatch(name)
 end
 
 function M.open()
-  return require("ghost-reader").select_book()
+  return require("ghost-reader").open()
 end
 
 function M.statusline()
-  return require("ghost-reader").select_book("statusline")
+  return require("ghost-reader").open_statusline()
 end
 
 function M.control()

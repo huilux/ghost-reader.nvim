@@ -1,99 +1,70 @@
---[[
-  init.lua - 主模块（公共 API）
-
-  角色：这是插件的公共入口模块。用户和外部代码通过 require("ghost-reader") 与此模块交互。
-  提供 setup()（初始化配置）、open()（打开书籍）、close()（关闭）、select_book()（选择书籍）、
-  toc()（目录）等公共 API。
-
-  这是最后阅读的文件，因为它需要理解前面所有子模块的职责才能看懂编排流程。
-
-  本文件涉及的关键概念：
-  - [Neovim API] vim.ui.select 选择对话框
-  - [Neovim API] vim.ui.input 输入对话框
-  - [Lua概念] 懒初始化模式（if not M.config then M.setup() end）
-  - [Lua概念] 模块间协调/编排
-
-  关联模块：协调 config、utils、reader、history、reader_statusline。
-]]
-
 local M = {}
 local config = require("ghost-reader.config")
 local utils = require("ghost-reader.utils")
 local session = require("ghost-reader.session")
 local history = require("ghost-reader.history")
 
--- [Lua概念] M.config = nil 表示"尚未初始化"。
--- 第一次调用 M.setup() 时才会被赋值。
--- 其他函数在使用前会检查：if not M.config then M.setup() end（懒初始化模式）。
 M.config = nil
 
--- 初始化插件配置
-function M.setup(user_config)
-  -- 调用 config.setup 合并默认值和用户自定义值
-  M.config = config.setup(user_config or {})
-  -- 确保缓存和数据目录存在
-  utils.ensure_dir(M.config.paths.cache_dir)
-  utils.ensure_dir(M.config.paths.data_dir)
-  return M.config
-end
-
--- 打开一本书（全屏模式）
-function M.open(path)
-  -- [Lua概念] 懒初始化：如果还没调用 setup()，先用默认配置初始化。
+local function select_book(preferred_mode)
   if not M.config then M.setup() end
-  session.configure(M.config)
-  session.start(path, "overlay")
-end
-
--- 关闭阅读模式
-function M.close()
-  session.stop()
-end
-
--- 显示目录（在当前阅读的书中跳转章节）
-function M.toc()
-  session.toc()
-end
-
--- 智能选择书籍：根据当前状态决定下一步操作
-function M.select_book()
-  if not M.config then M.setup() end
-
-  -- 情况4：没有任何阅读状态 → 从历史中选择一本书或输入新路径
   local entries = history.load(M.config)
   local items = {}
   for _, e in ipairs(entries) do
     table.insert(items, e.name .. "  (" .. e.path .. ")")
   end
-  -- 在列表末尾添加"输入新路径"选项
   table.insert(items, "+ 输入新路径...")
 
-  -- [Neovim API] vim.ui.select(items, opts, on_choice) 显示选择列表。
-  -- on_choice(item, idx) 回调：item 是选中的文本，idx 是索引。
-  -- idx 为 nil 表示用户取消了选择。
   vim.ui.select(items, { prompt = "Select book:" }, function(_, idx)
     if not idx then return end
     local path
     if idx <= #entries then
-      -- 选择了历史中的书
       path = entries[idx].path
     else
-      -- 选择了"输入新路径"
-      -- [Neovim API] vim.ui.input(opts, on_choice) 显示文本输入框。
-      -- completion = "file" 启用文件路径补全。
       vim.ui.input({ prompt = "Book path: ", completion = "file" }, function(input)
-        if input and input ~= "" then M.open(vim.fn.expand(input)) end
+        if input and input ~= "" then
+          session.configure(M.config)
+          session.start(vim.fn.expand(input), preferred_mode or "overlay")
+        end
       end)
       return
     end
-    -- 选择阅读模式
-    local mode_items = { "overlay", "statusline", "mirror" }
-    vim.ui.select(mode_items, { prompt = "Reading mode:" }, function(_, mode_idx)
-      local mode = mode_items[mode_idx or 1] or "overlay"
-      session.configure(M.config)
-      session.start(path, mode)
-    end)
+    session.configure(M.config)
+    session.start(path, preferred_mode or "overlay")
   end)
+end
+
+function M.setup(user_config)
+  M.config = config.setup(user_config or {})
+  utils.ensure_dir(M.config.paths.cache_dir)
+  utils.ensure_dir(M.config.paths.data_dir)
+  return M.config
+end
+
+function M.open(path)
+  if not M.config then M.setup() end
+  if not path or path == "" then
+    return select_book("overlay")
+  end
+  session.configure(M.config)
+  session.start(path, "overlay")
+end
+
+function M.open_statusline(path)
+  if not M.config then M.setup() end
+  if not path or path == "" then
+    return select_book("statusline")
+  end
+  session.configure(M.config)
+  session.start(path, "statusline")
+end
+
+function M.close()
+  session.stop()
+end
+
+function M.toc()
+  session.toc()
 end
 
 return M

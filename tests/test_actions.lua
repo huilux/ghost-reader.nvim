@@ -15,7 +15,7 @@ describe("actions", function()
   it("routes open to the public facade", function()
     local calls = 0
     package.loaded["ghost-reader"] = {
-      select_book = function(mode)
+      open = function(mode)
         calls = calls + 1
         _G.dispatched = mode or "default"
       end,
@@ -26,8 +26,15 @@ describe("actions", function()
   end)
 
   it("routes statusline open to the requested mode", function()
-    package.loaded["ghost-reader"] = { select_book = function(mode) _G.dispatched = mode or "default" end }
+    local calls = 0
+    package.loaded["ghost-reader"] = {
+      open_statusline = function(mode)
+        calls = calls + 1
+        _G.dispatched = mode or "default"
+      end,
+    }
     require("ghost-reader.actions").statusline()
-    assert.equal("statusline", _G.dispatched)
+    assert.equal("default", _G.dispatched)
+    assert.equal(1, calls)
   end)
 end)

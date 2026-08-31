@@ -4,9 +4,9 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 
 ## 两种阅读模式
 
-### sparse_notes（全屏模式）
+### overlay（默认模式）
 
-将书本文本伪装成代码中的 TODO/FIXME 注释，以真实打开的代码文件为骨架，书本文本稀疏穿插其中。整个 buffer 看起来像正常的代码文件。
+在真实 buffer 上方叠加虚拟内容，不改写文件内容、文件名或状态栏。每次只显示少量书本文字，让阅读尽量贴近正常编辑。
 
 ### statusline（状态栏模式）
 
@@ -24,18 +24,19 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 
 | 快捷键 | 功能 |
 |--------|------|
-| `<leader>go` | 智能入口：打开选书菜单 / 恢复阅读 |
-| `<leader>gq` | 关闭全屏阅读 |
-| `<leader>gt` | 目录（全屏模式下使用） |
+| `<leader>rr` | 打开或恢复阅读 |
+| `<leader>rs` | 打开状态栏阅读 |
+| `<leader>rm` | 进入或退出阅读控制层 |
+| `<leader>rh` | 隐藏或恢复阅读 |
+| `<leader>rt` | 目录 |
+| `<leader>rq` | 关闭当前会话 |
 
-`<leader>go` 的智能行为：
+`<leader>rr` 的智能行为：
 
 | 当前状态 | 按下后 |
 |----------|--------|
 | 没在阅读 | 弹出书籍选择菜单 |
-| 全屏阅读切到了别的 buffer | 切回阅读 buffer |
-| 状态栏阅读被老板键隐藏 | 恢复浮动窗口 |
-| 已在阅读 | 无操作 |
+| 已在阅读 | 打开当前会话或恢复显示 |
 
 ### 全屏模式快捷键（buffer-local）
 
@@ -45,11 +46,14 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 |--------|------|
 | `J` | 跳到下一个内容行（自动翻页） |
 | `K` | 跳到上一个内容行（自动翻页） |
-| `]c` | 下一章 |
-| `[c` | 上一章 |
-| `<leader>gt` | 打开目录跳转 |
-| `gp` | 显示阅读进度 |
-| `<Esc><Esc>` | 老板键：切回之前的工作 buffer |
+| `]]` | 下一章 |
+| `[[` | 上一章 |
+| `t` | 打开目录跳转 |
+| `g%` | 显示阅读进度 |
+| `gh` | 隐藏当前会话 |
+| `q` | 关闭当前会话 |
+| `?` | 显示按键帮助 |
+| `<Esc>` | 退出控制层 |
 
 ### 状态栏模式快捷键（buffer-local）
 
@@ -59,11 +63,11 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 |--------|------|
 | `J` | 下一行/段 |
 | `K` | 上一行/段 |
-| `<leader>g+` | 加速（每次 -500ms） |
-| `<leader>g-` | 减速（每次 +500ms） |
-| `<leader>gm` | 切换自动/手动模式 |
-| `<leader>gq` | 退出状态栏阅读 |
-| `<Esc><Esc>` | 老板键：隐藏浮动窗口 |
+| `a` | 切换自动/手动模式 |
+| `+` | 加速 |
+| `-` | 减速 |
+| `q` | 关闭当前会话 |
+| `<Esc>` | 退出控制层 |
 
 ## 安装
 
@@ -71,21 +75,25 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown 格式，在终端
 -- lazy.nvim
 return {
   'huilux/ghost-reader.nvim',
-  cmd = { 'GhostReader', 'GhostReaderClose', 'GhostReaderBoss', 'GhostReaderRestore', 'GhostReaderStatusline' },
+  cmd = { 'GhostReader', 'GhostReaderClose', 'GhostReaderControl', 'GhostReaderHide', 'GhostReaderStatusline', 'GhostReaderToc' },
   keys = {
-    { '<leader>go', function() require('ghost-reader').select_book() end, desc = '打开/恢复阅读' },
-    { '<leader>gq', function() require('ghost-reader').close() end,       desc = '关闭阅读' },
-    { '<leader>gt', function() require('ghost-reader').toc() end,         desc = '目录跳转' },
+    { '<leader>rr', function() require('ghost-reader').open() end, desc = '打开/恢复阅读' },
+    { '<leader>rs', function() require('ghost-reader').open_statusline() end, desc = '打开状态栏阅读' },
+    { '<leader>rq', function() require('ghost-reader').close() end, desc = '关闭阅读' },
   },
   opts = {
-    boss_key = {
-      keys = '<Esc><Esc>',
-      use_current_buffer = true,
-      preset = 'random',
+    reader = {
+      renderer = 'overlay',
+      visible_blocks = 3,
     },
     statusline = {
       interval = 3000,  -- 自动翻页间隔（毫秒）
-      mode = "auto",    -- "auto" 自动 / "manual" 手动
+      autoplay = true,
+      page_step = 5,
+    },
+    stealth = {
+      hide_on_focus_lost = true,
+      silent = true,
     },
   },
 }
@@ -97,14 +105,15 @@ return {
 |------|------|
 | `:GhostReader [path]` | 打开书籍（无参数弹出选择） |
 | `:GhostReaderClose` | 关闭阅读 |
+| `:GhostReaderControl` | 进入或退出阅读控制层 |
+| `:GhostReaderHide` | 隐藏或恢复当前会话 |
+| `:GhostReaderToc` | 打开目录 |
 | `:GhostReaderStatusline [path]` | 以状态栏模式打开 |
-| `:GhostReaderBoss` | 手动触发老板键 |
-| `:GhostReaderRestore` | 手动恢复 |
 
 ## 功能
 
-- **书籍历史**：自动记录最近打开的 20 本书，`<leader>go` 直接选择
+- **书籍历史**：自动记录最近打开的书籍，`<leader>rr` 直接选择
 - **进度记忆**：自动保存/恢复章节和行位置
-- **老板键**：`<Esc><Esc>` 一键隐藏，`<leader>go` 一键恢复
+- **会话控制**：`<leader>rm` 进入控制层，`<leader>rh` 隐藏或恢复
 - **多格式**：EPUB（需系统有 unzip）、TXT、Markdown
-- **长文本换行**：全屏模式自动 80 列换行，状态栏模式按屏幕宽度分段显示
+- **长文本换行**：overlay 模式按可视区域宽度展示，状态栏模式按屏幕宽度分段显示

@@ -13,8 +13,8 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 1. Introduction                                    |ghost-reader-intro|
 
 ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
-with stealth modes that disguise book content as code. Features a boss key
-that instantly switches back to your previous buffer.
+with an overlay mode that keeps book content in the real buffer and a
+statusline mode that shows a one-line floating reader.
 
 Requirements:
   - Neovim >= 0.10
@@ -27,13 +27,17 @@ Requirements:
   -- lazy.nvim
   {
     "huilux/ghost-reader.nvim",
-    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderBoss", "GhostReaderRestore", "GhostReaderStatusline" },
+    cmd = { "GhostReader", "GhostReaderClose", "GhostReaderControl", "GhostReaderHide", "GhostReaderStatusline", "GhostReaderToc" },
     keys = {
-      { "<leader>go", function() require("ghost-reader").select_book() end, desc = "Open/resume" },
-      { "<leader>gq", function() require("ghost-reader").close() end,       desc = "Quit" },
-      { "<leader>gt", function() require("ghost-reader").toc() end,         desc = "TOC" },
+      { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open/resume" },
+      { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Statusline reader" },
+      { "<leader>rq", function() require("ghost-reader").close() end, desc = "Quit" },
     },
-    opts = {},
+    opts = {
+      reader = { renderer = "overlay", visible_blocks = 3 },
+      statusline = { interval = 3000, autoplay = true, page_step = 5 },
+      stealth = { hide_on_focus_lost = true, silent = true },
+    },
   }
 <
 
@@ -42,23 +46,25 @@ Requirements:
 
 :GhostReader [path]        Open an ebook (no arg shows book history)
 :GhostReaderClose          Close current book
+:GhostReaderControl        Toggle reading controls
+:GhostReaderHide            Hide or restore the active session
 :GhostReaderStatusline     Open in statusline mode (bottom float win)
-:GhostReaderBoss           Activate boss key (switch to previous buffer)
-:GhostReaderRestore        Restore reading after boss key
+:GhostReaderToc             Open table of contents
 
 ==============================================================================
 4. Configuration                                   |ghost-reader-config~
 
 >lua
   opts = {
-    boss_key = {
-      keys = "<Esc><Esc>",
-      use_current_buffer = true,
-      preset = "random",
-    },
+    reader = { renderer = "overlay", visible_blocks = 3 },
     statusline = {
-      interval = 3000,   -- auto-advance interval in ms
-      mode = "auto",     -- "auto" or "manual"
+      interval = 3000,
+      autoplay = true,
+      page_step = 5,
+    },
+    stealth = {
+      hide_on_focus_lost = true,
+      silent = true,
     },
   }
 <
@@ -66,9 +72,9 @@ Requirements:
 ==============================================================================
 5. Reading Modes                                   |ghost-reader-modes~
 
-sparse_notes (fullscreen) ~
-  Book text is disguised as TODO/FIXME comments scattered throughout real
-  code (from your open buffers). Long lines wrap at 80 columns.
+overlay (default) ~
+  Book content is drawn over the real buffer with virtual lines. The file
+  contents remain unchanged.
 
 statusline (bottom float window) ~
   A 1-row floating window at the bottom shows one line at a time. Supports
@@ -79,29 +85,29 @@ statusline (bottom float window) ~
 6. Keymaps                                         |ghost-reader-keymaps~
 
 Global (available in any buffer):
-  <leader>go    Open book / resume reading (smart)
-  <leader>gq    Close fullscreen reader
-  <leader>gt    Table of contents
+  <leader>rr    Open book / resume reading
+  <leader>rs    Open statusline reader
+  <leader>rq    Close the active session
+  <leader>rt    Table of contents
 
-Fullscreen mode (buffer-local):
-  J             Jump to next content line (auto page turn)
-  K             Jump to previous content line (auto page turn)
-  ]c            Next chapter
-  [c            Previous chapter
-  gp            Show progress
-  <leader>gt    Table of contents
-  <Esc><Esc>    Boss key (switch to previous buffer)
+Control layer (buffer-local):
+  j             Next content
+  k             Previous content
+  <C-f>         Next page
+  <C-b>         Previous page
+  ]]            Next chapter
+  [[            Previous chapter
+  t             Table of contents
+  g%            Show progress
+  gh            Hide session
+  q             Close session
+  ?             Help
+  <Esc>         Exit controls
 
 Statusline mode (buffer-local):
-  J             Next line/chunk
-  K             Previous line/chunk
-  <leader>g+    Speed up (-500ms)
-  <leader>g-    Slow down (+500ms)
-  <leader>gm    Toggle auto/manual
-  <leader>gq    Stop statusline reader
-  <Esc><Esc>    Boss key (hide float window)
-
-Boss key recovery:
-  <leader>go    Restore reading from any state
+  a             Toggle autoplay
+  +             Speed up
+  -             Slow down
+  <Esc>         Exit controls
 
  vim:tw=78:ts=8:ft=help:norl:

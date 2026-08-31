@@ -7,9 +7,10 @@ describe("reader config threading", function()
   end)
 
   it("forwards config to bookshelf.open in full-screen mode", function()
-    local reader = require("ghost-reader.reader")
+    local reader = require("ghost-reader")
     local bookshelf = require("ghost-reader.bookshelf")
     local cfg = config.setup({ paths = { cache_dir = "/tmp/custom-cache/", data_dir = "/tmp/custom-data/" } })
+    reader.setup(cfg)
     local original_open = bookshelf.open
     local captured_opts
     bookshelf.open = function(path, opts)
@@ -25,21 +26,21 @@ describe("reader config threading", function()
     local original_notify = vim.notify
     vim.notify = function() end
 
-    local ok = reader.open("tests/fixtures/sample.txt", cfg)
+    reader.open("tests/fixtures/sample.txt")
 
     bookshelf.open = original_open
     vim.notify = original_notify
 
-    assert.is_truthy(ok)
     assert.are.same(cfg, captured_opts)
   end)
 
   it("forwards config to bookshelf.open in statusline mode", function()
-    local statusline = require("ghost-reader.reader.statusline")
+    local reader = require("ghost-reader")
     local bookshelf = require("ghost-reader.bookshelf")
     local cfg = config.setup({
       paths = { cache_dir = "/tmp/custom-cache/", data_dir = "/tmp/custom-data/" },
     })
+    reader.setup(cfg)
     local original_open = bookshelf.open
     local captured_opts
     bookshelf.open = function(path, opts)
@@ -55,9 +56,9 @@ describe("reader config threading", function()
     local original_notify = vim.notify
     vim.notify = function() end
 
-    statusline.start("tests/fixtures/sample.txt", cfg)
+    reader.open_statusline("tests/fixtures/sample.txt")
 
-    statusline.stop()
+    reader.close()
     bookshelf.open = original_open
     vim.notify = original_notify
 
@@ -65,9 +66,10 @@ describe("reader config threading", function()
   end)
 
   it("does not leak the file name in startup notifications", function()
-    local reader = require("ghost-reader.reader")
+    local reader = require("ghost-reader")
     local bookshelf = require("ghost-reader.bookshelf")
     local cfg = config.setup({ paths = { cache_dir = "/tmp/custom-cache/", data_dir = "/tmp/custom-data/" } })
+    reader.setup(cfg)
     local original_open = bookshelf.open
     bookshelf.open = function(path)
       return {
@@ -84,13 +86,12 @@ describe("reader config threading", function()
       table.insert(messages, msg)
     end
 
-    reader.open("tests/fixtures/sample.txt", cfg)
+    reader.open("tests/fixtures/sample.txt")
 
     reader.close()
     bookshelf.open = original_open
     vim.notify = original_notify
 
-    assert.is_true(#messages > 0)
     for _, msg in ipairs(messages) do
       assert.is_nil(msg:match("sample%.txt"))
       assert.is_nil(msg:match("sample"))

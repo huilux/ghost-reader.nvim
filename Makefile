@@ -11,8 +11,12 @@ test-all:
 	done
 
 test-runner-check:
-	@if $(NVIM) --headless -u $(TEST_INIT) -c "PlenaryBustedFile tests/fixtures/failing_test.lua"; then \
-		echo "runner failed to propagate a failing test"; exit 1; \
-	else \
-		echo "runner correctly propagated a failing test"; \
-	fi
+	@output="$$(mktemp)"; \
+	trap 'rm -f "$$output"' EXIT; \
+	if $(NVIM) --headless -u $(TEST_INIT) -c "PlenaryBustedFile tests/fixtures/failing_test.lua" >"$$output" 2>&1; then \
+		echo "runner failed to propagate a failing test"; cat "$$output"; exit 1; \
+	fi; \
+	if ! grep -q "RUNNER_SENTINEL" "$$output"; then \
+		echo "runner did not report the sentinel failure"; cat "$$output"; exit 1; \
+	fi; \
+	echo "runner correctly propagated the sentinel failure"

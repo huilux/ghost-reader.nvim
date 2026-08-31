@@ -1,5 +1,5 @@
 describe("test runner sentinel", function()
-  it("fails intentionally", function()
-    assert.is_true(false)
+  it("fails intentionally with RUNNER_SENTINEL", function()
+    assert.is_true(false, "RUNNER_SENTINEL: intentional failure")
   end)
 end)

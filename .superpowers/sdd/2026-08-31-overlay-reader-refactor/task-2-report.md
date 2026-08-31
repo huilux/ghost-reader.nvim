@@ -24,3 +24,14 @@ Date: 2026-08-31
 ## Concerns
 
 - This task intentionally breaks the old config contract. Downstream modules that still read legacy fields like `cache_dir`, `data_dir`, or flat `keymaps` will need follow-up refactors in later tasks.
+
+## Fix Note
+
+- Tightened nested section validation so malformed section values like `reader = false` or `keymaps = false` now raise explicit errors instead of silently falling back to defaults.
+
+## Fix Verification
+
+- `make test FILE=test_config.lua`
+  - Summary: passed, 5 tests successful, 0 failures, 0 errors.
+- `make test-all`
+  - Summary: passed, all current test files successful.

@@ -119,6 +119,9 @@ local function validate_schema(user_config)
 
   validate_known_keys(user_config, defaults, nil)
 
+  if user_config.reader ~= nil and type(user_config.reader) ~= "table" then
+    error("invalid config value at reader: expected table")
+  end
   local reader = user_config.reader or {}
   if reader.renderer ~= nil then
     validate_value(reader.renderer, "renderer", "reader.renderer")
@@ -130,6 +133,9 @@ local function validate_schema(user_config)
     validate_value(reader.mirror_fallback, "boolean", "reader.mirror_fallback")
   end
 
+  if user_config.statusline ~= nil and type(user_config.statusline) ~= "table" then
+    error("invalid config value at statusline: expected table")
+  end
   local statusline = user_config.statusline or {}
   if statusline.interval ~= nil then
     validate_value(statusline.interval, "positive_integer", "statusline.interval")
@@ -141,12 +147,18 @@ local function validate_schema(user_config)
     validate_value(statusline.page_step, "positive_integer", "statusline.page_step")
   end
 
+  if user_config.stealth ~= nil and type(user_config.stealth) ~= "table" then
+    error("invalid config value at stealth: expected table")
+  end
   local stealth = user_config.stealth or {}
   if stealth.hide_on_focus_lost ~= nil then
     validate_value(stealth.hide_on_focus_lost, "boolean", "stealth.hide_on_focus_lost")
   end
   if stealth.silent ~= nil then
     validate_value(stealth.silent, "boolean", "stealth.silent")
+  end
+  if stealth.overlay ~= nil and type(stealth.overlay) ~= "table" then
+    error("invalid config value at stealth.overlay: expected table")
   end
   local overlay = stealth.overlay or {}
   if overlay.hide_on_insert ~= nil then
@@ -159,6 +171,9 @@ local function validate_schema(user_config)
     validate_value(overlay.hide_on_win_leave, "boolean", "stealth.overlay.hide_on_win_leave")
   end
 
+  if user_config.paths ~= nil and type(user_config.paths) ~= "table" then
+    error("invalid config value at paths: expected table")
+  end
   local paths = user_config.paths or {}
   if paths.cache_dir ~= nil then
     validate_value(paths.cache_dir, "string", "paths.cache_dir")
@@ -167,8 +182,14 @@ local function validate_schema(user_config)
     validate_value(paths.data_dir, "string", "paths.data_dir")
   end
 
+  if user_config.keymaps ~= nil and type(user_config.keymaps) ~= "table" then
+    error("invalid config value at keymaps: expected table")
+  end
   local keymaps = user_config.keymaps or {}
   for _, section in ipairs({ "global", "controls", "statusline" }) do
+    if keymaps[section] ~= nil and type(keymaps[section]) ~= "table" then
+      error("invalid config value at keymaps." .. section .. ": expected table")
+    end
     local section_values = keymaps[section] or {}
     local defaults_values = defaults.keymaps[section] or {}
     for key, value in pairs(section_values) do

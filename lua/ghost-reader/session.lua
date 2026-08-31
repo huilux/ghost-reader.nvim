@@ -154,6 +154,7 @@ local function open_book(path, mode)
     return false
   end
 
+  local previous = active
   local requested_mode = mode or cfg.reader.renderer or "overlay"
   local control_buf = vim.api.nvim_get_current_buf()
   local control_win = vim.api.nvim_get_current_win()
@@ -169,6 +170,13 @@ local function open_book(path, mode)
   local impl = renderer.create(ctx_obj, requested_mode)
   if not impl then
     return false
+  end
+
+  if previous then
+    local previous_state = active
+    active = previous
+    M.stop()
+    active = previous_state
   end
 
   set_state({
@@ -206,9 +214,6 @@ function M.configure(cfg)
 end
 
 function M.start(path, mode)
-  if active then
-    M.stop()
-  end
   return open_book(path, mode)
 end
 
@@ -237,6 +242,30 @@ function M.hide(policy)
   active.hidden_policy = "hard"
   if active.renderer.hide then
     active.renderer.hide(active.ctx)
+  end
+  return true
+end
+
+function M.toggle_hide()
+  if not active then
+    return false
+  end
+  if active.visibility == "VISIBLE" then
+    return M.hide("hard")
+  end
+  return M.restore()
+end
+
+function M.toggle_controls()
+  if not active then
+    return false
+  end
+  if active.controls == "ACTIVE" then
+    keymaps.leave_controls(active)
+    active.controls = "INACTIVE"
+  else
+    keymaps.enter_controls(active, active.config)
+    active.controls = "ACTIVE"
   end
   return true
 end
@@ -302,9 +331,7 @@ function M.dispatch(name)
   elseif name == "toc" then
     return M.toc()
   elseif name == "exit_controls" then
-    keymaps.leave_controls(active)
-    active.controls = "INACTIVE"
-    return true
+    return M.toggle_controls()
   elseif name == "progress" then
     progress.show(active.book, active.position)
     return true

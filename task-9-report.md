@@ -21,3 +21,4 @@ Notes:
 
 - Legacy `reader/init.lua` still remains in place for now, but the new renderer facade keeps it working until Task 10 removes the old path.
 - Fix pass: session API now exposes `configure`, `start`, `get`, `hide`, `stop`, `dispatch`, and `_reset_for_tests`, and the integration coverage now exercises mirror fallback plus controlled navigation fixtures.
+- Fix pass 2: public callers now use the string `path + mode` start contract, renderer errors say `unknown reader view: ...`, and transactional start leaves the active session untouched if replacement parsing fails.

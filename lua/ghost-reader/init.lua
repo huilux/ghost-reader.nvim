@@ -41,7 +41,8 @@ end
 function M.open(path)
   -- [Lua概念] 懒初始化：如果还没调用 setup()，先用默认配置初始化。
   if not M.config then M.setup() end
-  local ok = session.open({ path = path, config = M.config, mode = "overlay" })
+  session.configure(M.config)
+  local ok = session.start(path, "overlay")
   if ok then
     -- 记录到历史
     history.record(path, M.config)
@@ -93,7 +94,8 @@ function M.select_book()
     local mode_items = { "overlay", "statusline", "mirror" }
     vim.ui.select(mode_items, { prompt = "Reading mode:" }, function(_, mode_idx)
       local mode = mode_items[mode_idx or 1] or "overlay"
-      session.open({ path = path, config = M.config, mode = mode })
+      session.configure(M.config)
+      session.start(path, mode)
     end)
   end)
 end

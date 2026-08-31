@@ -60,4 +60,25 @@ describe("session", function()
     assert.is_function(session.dispatch)
     assert.is_function(session._reset_for_tests)
   end)
+
+  it("keeps the active session when a replacement book fails to parse", function()
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = {
+        cache_dir = root .. "-cache/",
+        data_dir = root .. "-data/",
+      },
+    })
+    local good_path = vim.fn.tempname() .. ".txt"
+    local bad_path = "/definitely-missing/ghost-reader.txt"
+    vim.fn.writefile({ "alpha" }, good_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(good_path, "overlay"))
+    local before = session.get()
+    assert.is_false(session.start(bad_path, "overlay"))
+    assert.equal(before, session.get())
+    session.stop()
+  end)
 end)

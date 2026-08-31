@@ -14,7 +14,7 @@ local renderers = {
 function M.get(name)
   local renderer = renderers[name]
   if not renderer then
-    error("unknown renderer: " .. tostring(name))
+    error("unknown reader view: " .. tostring(name))
   end
   return renderer
 end

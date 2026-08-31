@@ -81,7 +81,7 @@ function M.parse(path, opts)
   }
 
   local f = io.open(path, "r")
-  if not f then return book end
+  if not f then return nil, "file not found: " .. path end
 
   local all_lines = {}
   -- [Lua概念] for var in iterator do ... end 是 Lua 的泛型循环。

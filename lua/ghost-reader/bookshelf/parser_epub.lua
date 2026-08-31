@@ -70,7 +70,7 @@ end
 
 function M.parse(path, opts)
   opts = opts or {}
-  local cache_dir = opts.cache_dir or vim.fn.stdpath("cache") .. "/ghost-reader/"
+  local cache_dir = opts.cache_dir or (opts.paths and opts.paths.cache_dir) or (vim.fn.stdpath("cache") .. "/ghost-reader/")
 
   -- 检查系统是否安装了 unzip 命令
   if not utils.command_exists("unzip") then

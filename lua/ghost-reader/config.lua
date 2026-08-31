@@ -218,6 +218,8 @@ function M.setup(user_config)
   local cfg = deep_merge(defaults, user_config)
   cfg.paths.cache_dir = cfg.paths.cache_dir or (vim.fn.stdpath("cache") .. "/ghost-reader/")
   cfg.paths.data_dir = cfg.paths.data_dir or (vim.fn.stdpath("data") .. "/ghost-reader/")
+  cfg.cache_dir = cfg.paths.cache_dir
+  cfg.data_dir = cfg.paths.data_dir
   return cfg
 end
 

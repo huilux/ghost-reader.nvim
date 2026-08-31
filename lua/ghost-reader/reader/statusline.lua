@@ -252,7 +252,7 @@ function M.start(path, config)
   -- 如果已在运行，先停止
   if M.timer then M.stop() end
 
-  local book, err = bookshelf.open(path)
+  local book, err = bookshelf.open(path, config)
   if err then
     utils.notify(err, vim.log.levels.ERROR)
     return
@@ -328,10 +328,7 @@ function M.start(path, config)
   -- 设置键映射
   M._set_keymaps()
 
-  local name = vim.fn.fnamemodify(path, ":t:r")
-  local mode_label = auto_mode and "自动" or "手动"
-  utils.notify(string.format("%s · 状态栏%s模式\nJ/K=翻行 +/-=调速 m=切换模式 q=退出",
-    name, mode_label))
+  utils.notify(auto_mode and "statusline reading started (auto)" or "statusline reading started (manual)")
 end
 
 -- 停止状态栏阅读模式，清理所有资源
@@ -357,7 +354,6 @@ function M.stop()
   if M.state then
     local fake_book = { path = M.state.book.path, chapters = M.state.book.chapters }
     progress.save(fake_book, M.state, M.state.config)
-    bookshelf.close()
   end
   M.state = nil
   M.chunks = {}

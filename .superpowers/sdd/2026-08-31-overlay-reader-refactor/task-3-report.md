@@ -25,3 +25,10 @@ Verification:
 - `make test FILE=test_parser_epub.lua`
 
 All of the above passed on the final run.
+
+Fix note:
+
+- Threaded the active config object through `reader.open()` and `reader.statusline.start()` so EPUB can honor `paths.cache_dir`.
+- Replaced startup notifications with generic messages that do not expose book title or path.
+- Split missing vs unreadable file errors using `vim.uv.fs_stat()` before open attempts.
+- Added a compatibility alias for `config.cache_dir` / `config.data_dir` so the existing progress/history code keeps working while the config surface stays normalized under `paths`.

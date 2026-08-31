@@ -18,6 +18,14 @@
 
 local M = {}
 
+local function file_status(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat then
+    return nil
+  end
+  return stat
+end
+
 -- 章节标题的正则模式列表。
 -- [Lua概念] Lua 表可以用 { val1, val2, ... } 直接创建数组（整数索引从 1 开始）。
 local default_chapter_patterns = {
@@ -80,8 +88,12 @@ function M.parse(path, opts)
     toc = {},
   }
 
+  local stat = file_status(path)
+  if not stat then return nil, "file not found: " .. path end
+  if stat.type ~= "file" then return nil, "file unreadable: " .. path end
+
   local f = io.open(path, "r")
-  if not f then return nil, "file not found: " .. path end
+  if not f then return nil, "file unreadable: " .. path end
 
   local all_lines = {}
   -- [Lua概念] for var in iterator do ... end 是 Lua 的泛型循环。

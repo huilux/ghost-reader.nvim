@@ -14,6 +14,14 @@
 
 local M = {}
 
+local function file_status(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat then
+    return nil
+  end
+  return stat
+end
+
 function M.parse(path)
   local book = {
     format = "markdown",
@@ -22,8 +30,12 @@ function M.parse(path)
     toc = {},
   }
 
+  local stat = file_status(path)
+  if not stat then return nil, "file not found: " .. path end
+  if stat.type ~= "file" then return nil, "file unreadable: " .. path end
+
   local f = io.open(path, "r")
-  if not f then return nil, "file not found: " .. path end
+  if not f then return nil, "file unreadable: " .. path end
 
   local all_lines = {}
   for line in f:lines() do

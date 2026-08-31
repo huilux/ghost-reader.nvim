@@ -17,6 +17,10 @@
 local M = {}
 local utils = require("ghost-reader.utils")
 
+local function file_status(path)
+  return vim.uv.fs_stat(path)
+end
+
 -- 将 HTML 转换为纯文本：移除所有 HTML 标签和实体
 function M._strip_html(html)
   if not html then return "" end
@@ -77,8 +81,12 @@ function M.parse(path, opts)
     return nil, "unzip command not found"
   end
 
-  if not utils.file_exists(path) then
+  local stat = file_status(path)
+  if not stat then
     return nil, "file not found: " .. path
+  end
+  if stat.type ~= "file" then
+    return nil, "file unreadable: " .. path
   end
 
   -- 将文件路径转为安全的目录名（替换 / 和 . 为 _）

@@ -36,7 +36,7 @@ function M.open(path, config)
   -- 如果已在阅读模式中，先清理旧状态
   if M.state then M.close() end
 
-  local book, err = bookshelf.open(path)
+  local book, err = bookshelf.open(path, config)
   if err then
     utils.notify(err, vim.log.levels.ERROR)
     return false
@@ -90,9 +90,7 @@ function M.open(path, config)
   -- 设置 Buffer 局部键映射
   M._set_keymaps(buf, config.keymaps)
 
-  local book_name = vim.fn.fnamemodify(path, ":t:r")
-  utils.notify(string.format("%s · %d chapters\nJ/K=内容跳转 ]c/[c=章节 <Esc><Esc>=老板键",
-    book_name, #book.chapters))
+  utils.notify("reading started")
   -- [Neovim基础] 自动命令（Autocmd）：在特定事件发生时自动执行回调。
   -- 这里注册了两个事件监听：
   --   BufUnload: Buffer 被卸载时（用户关闭或切换）保存进度
@@ -276,7 +274,6 @@ function M.close()
     -- 回忆：utils.safe_delete_buf 自动检查 Buffer 有效性。
     utils.safe_delete_buf(M.state.buf)
   end
-  bookshelf.close()
   if M._quit_augroup then
     vim.api.nvim_del_augroup_by_name("ghost-reader-quit-guard")
     M._quit_augroup = nil

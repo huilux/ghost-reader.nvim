@@ -20,3 +20,4 @@ Behavior verified:
 Notes:
 
 - Legacy `reader/init.lua` still remains in place for now, but the new renderer facade keeps it working until Task 10 removes the old path.
+- Fix pass: session API now exposes `configure`, `start`, `get`, `hide`, `stop`, `dispatch`, and `_reset_for_tests`, and the integration coverage now exercises mirror fallback plus controlled navigation fixtures.

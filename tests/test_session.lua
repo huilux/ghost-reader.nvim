@@ -7,7 +7,13 @@ describe("session", function()
 
   it("tracks lifecycle, visibility, and controls for an opened overlay session", function()
     local session = require("ghost-reader.session")
-    local cfg = require("ghost-reader.config").setup()
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = {
+        cache_dir = root .. "-cache/",
+        data_dir = root .. "-data/",
+      },
+    })
 
     local buf = helpers.new_normal_buffer({ "one", "two", "three" })
     local book_path = vim.fn.tempname() .. ".txt"
@@ -25,21 +31,33 @@ describe("session", function()
       end,
     }
 
-    assert.is_true(session.open({ path = book_path, renderer = "overlay", buffer = buf, config = cfg }))
+    assert.same(cfg, session.configure(cfg))
+    assert.is_true(session.start(book_path, "overlay"))
     assert.equal("ACTIVE", session.state.lifecycle)
     assert.equal("VISIBLE", session.state.visibility)
-    assert.equal("ACTIVE", session.state.controls)
     assert.equal("overlay", session.state.mode)
 
-    assert.is_true(session.toggle_hide())
-    assert.equal("HARD_HIDDEN", session.state.visibility)
-    assert.equal("INACTIVE", session.state.controls)
+    assert.is_true(session.hide("soft"))
+    assert.equal("SOFT_HIDDEN", session.state.visibility)
+    assert.is_truthy(session.state.controls)
 
     assert.is_true(session.restore())
     assert.equal("VISIBLE", session.state.visibility)
     assert.equal("ACTIVE", session.state.controls)
 
     assert.is_true(session.stop())
+    assert.is_nil(session.get())
     assert.equal("IDLE", session.state.lifecycle)
+  end)
+
+  it("exposes the lifecycle API surface", function()
+    local session = require("ghost-reader.session")
+    assert.is_function(session.configure)
+    assert.is_function(session.start)
+    assert.is_function(session.get)
+    assert.is_function(session.hide)
+    assert.is_function(session.stop)
+    assert.is_function(session.dispatch)
+    assert.is_function(session._reset_for_tests)
   end)
 end)

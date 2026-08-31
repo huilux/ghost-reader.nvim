@@ -21,3 +21,4 @@ Verification:
 Notes:
 
 - `make test-all` in this checkout does not currently surface a useful suite summary, so I verified the new renderer with the focused file and then checked the broader suite until the existing unrelated config failure appeared.
+- Fix pass: `ctx.view_state.statusline` now owns the renderer state, autoplay is generation-safe and one-shot, resize and speed controls are covered, and the tests use a timer stub instead of assuming synchronous callbacks.

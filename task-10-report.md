@@ -1,6 +1,6 @@
 # Task 10 Report
 
-Cutover completed for the public API and compatibility surface, plus the follow-up fixes requested in round 1.
+Cutover completed for the public API and compatibility surface, plus the follow-up fixes requested in rounds 1 and 2.
 
 What changed:
 
@@ -19,6 +19,7 @@ What changed:
   - `setup()`
 - `setup()` now installs the final global `<Plug>` mappings via `keymaps.setup()`.
 - `open()` now restores a hidden session when called without a path instead of always opening the picker.
+- README control tables now use lowercase `j/k` everywhere the control layer is documented.
 - Updated `plugin/ghost-reader.lua` to expose only the final commands:
   - `:GhostReader`
   - `:GhostReaderClose`
@@ -38,3 +39,4 @@ Verification:
 Notes:
 
 - The scan still reports the legacy key names inside `tests/test_config.lua`, but only as negative assertions that confirm the old configuration keys are rejected.
+- The scan no longer reports stale shipped control examples; the remaining hits are intentional references in tests and internal readers/navigate helpers.

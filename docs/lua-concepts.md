@@ -181,7 +181,7 @@ if err then ... end
 ### 匿名函数
 
 ```lua
-vim.keymap.set("n", "J", function()
+vim.keymap.set("n", "j", function()
   -- 回调函数直接内联定义
 end)
 ```
@@ -365,7 +365,7 @@ ghost-reader.open(path)       选择书籍 / 恢复会话 → 交给 session
 session.start(path)           创建会话 → 选择 renderer → 渲染内容
     │
     ▼
-用户阅读（J/K内容跳转）
+用户阅读（j/k 内容跳转）
     │
     ▼
 navigate.next_page(state)     更新阅读位置 → 重新渲染

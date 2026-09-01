@@ -58,6 +58,15 @@ describe("keymaps", function()
     keymaps.leave_controls(session)
   end)
 
+  it("leaves escape and the old control-layer hide key untouched", function()
+    local buf = helpers.new_normal_buffer({ "one" })
+    local session = { mode = "overlay", control_buf = buf, controls_active = false }
+    keymaps.enter_controls(session, config.setup())
+    assert.same({}, maparg_in_buf(buf, "<Esc>"))
+    assert.same({}, maparg_in_buf(buf, "gh"))
+    keymaps.leave_controls(session)
+  end)
+
   it("cleans the captured buffer after current buffer changes", function()
     local first = helpers.new_normal_buffer({ "one" })
     local second = vim.api.nvim_create_buf(true, false)
@@ -78,7 +87,7 @@ describe("keymaps", function()
       { lhs = "<leader>rr", rhs = "<Plug>(GhostReaderOpen)" },
       { lhs = "<leader>rs", rhs = "<Plug>(GhostReaderStatusline)" },
       { lhs = "<leader>rm", rhs = "<Plug>(GhostReaderControl)" },
-      { lhs = "<leader>rh", rhs = "<Plug>(GhostReaderHide)" },
+      { lhs = "<Esc><Esc>", rhs = "<Plug>(GhostReaderHide)" },
       { lhs = "<leader>rt", rhs = "<Plug>(GhostReaderToc)" },
       { lhs = "<leader>rq", rhs = "<Plug>(GhostReaderClose)" },
     }
@@ -87,5 +96,41 @@ describe("keymaps", function()
       local map = vim.fn.maparg(resolved, "n", false, true)
       assert.equal(item.rhs, map.rhs)
     end
+    assert.same({}, vim.fn.maparg((vim.g.mapleader or "\\") .. "rh", "n", false, true))
+  end)
+
+  it("removes a previously installed global mapping after its key changes", function()
+    local old_cfg = config.setup({ keymaps = { global = { hide = "<leader>rh" } } })
+    keymaps.setup(old_cfg)
+    local old_lhs = (vim.g.mapleader or "\\") .. "rh"
+    assert.equal("<Plug>(GhostReaderHide)", vim.fn.maparg(old_lhs, "n", false, true).rhs)
+
+    keymaps.setup(config.setup())
+
+    assert.same({}, vim.fn.maparg(old_lhs, "n", false, true))
+    assert.equal("<Plug>(GhostReaderHide)", vim.fn.maparg("<Esc><Esc>", "n", false, true).rhs)
+  end)
+
+  it("removes a previously installed global mapping when it is disabled", function()
+    keymaps.setup(config.setup())
+    assert.equal("<Plug>(GhostReaderHide)", vim.fn.maparg("<Esc><Esc>", "n", false, true).rhs)
+
+    local disabled_cfg = config.setup({ keymaps = { global = { hide = false } } })
+    keymaps.setup(disabled_cfg)
+
+    assert.same({}, vim.fn.maparg("<Esc><Esc>", "n", false, true))
+  end)
+
+  it("removes an installed leader mapping after mapleader changes", function()
+    local original_leader = vim.g.mapleader
+    vim.g.mapleader = ","
+    keymaps.setup(config.setup({ keymaps = { global = { hide = "<leader>rh" } } }))
+    assert.equal("<Plug>(GhostReaderHide)", vim.fn.maparg(",rh", "n", false, true).rhs)
+
+    vim.g.mapleader = ";"
+    keymaps.setup(config.setup())
+    vim.g.mapleader = original_leader
+
+    assert.same({}, vim.fn.maparg(",rh", "n", false, true))
   end)
 end)

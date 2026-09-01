@@ -63,14 +63,7 @@ end
 
 function M.open(path)
   if not M.config then M.setup() end
-  local current = session.get()
   if not path or path == "" then
-    if current and current.visibility ~= "IDLE" and current.visibility ~= "VISIBLE" then
-      return session.restore()
-    end
-    if current and current.visibility == "VISIBLE" and current.controls ~= "ACTIVE" then
-      return session.toggle_controls()
-    end
     return choose_book()
   end
   session.configure(M.config)

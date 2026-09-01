@@ -268,6 +268,9 @@ function M.hide(policy)
     return false
   end
   if policy == "soft" then
+    if active.visibility == "HARD_HIDDEN" then
+      return false
+    end
     active.visibility = "SOFT_HIDDEN"
     active.hidden_policy = "soft"
     if active.renderer.hide then

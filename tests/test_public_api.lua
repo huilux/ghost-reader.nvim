@@ -17,7 +17,7 @@ describe("public api", function()
     assert.is_function(reader.toggle_hide)
   end)
 
-  it("restores a hidden session on no-arg open", function()
+  it("opens the book selector instead of restoring a hidden session", function()
     local calls = {}
     package.loaded["ghost-reader.session"] = {
       get = function()
@@ -40,7 +40,12 @@ describe("public api", function()
       toc = function() end,
       dispatch = function() end,
     }
-    package.loaded["ghost-reader.history"] = { load = function() return {} end }
+    package.loaded["ghost-reader.history"] = {
+      load = function()
+        calls[#calls + 1] = "load_history"
+        return {}
+      end,
+    }
     package.loaded["ghost-reader.keymaps"] = { setup = function() end }
     package.loaded["ghost-reader.actions"] = {
       control = function() calls[#calls + 1] = "action_control" end,
@@ -49,11 +54,17 @@ describe("public api", function()
 
     local reader = require("ghost-reader")
     reader.setup()
-    assert.is_true(reader.open())
-    assert.same({ "restore" }, calls)
+    local original_select = vim.ui.select
+    vim.ui.select = function(_, opts, on_choice)
+      calls[#calls + 1] = opts.prompt
+      on_choice(nil, nil)
+    end
+    reader.open()
+    vim.ui.select = original_select
+    assert.same({ "load_history", "Select book:" }, calls)
   end)
 
-  it("reactivates inactive controls on no-arg open when the session is already visible", function()
+  it("opens the book selector instead of reactivating a visible session", function()
     local calls = {}
     package.loaded["ghost-reader.session"] = {
       get = function()
@@ -76,14 +87,25 @@ describe("public api", function()
       toc = function() end,
       dispatch = function() end,
     }
-    package.loaded["ghost-reader.history"] = { load = function() return {} end }
+    package.loaded["ghost-reader.history"] = {
+      load = function()
+        calls[#calls + 1] = "load_history"
+        return {}
+      end,
+    }
     package.loaded["ghost-reader.keymaps"] = { setup = function() end }
     package.loaded["ghost-reader.actions"] = {}
 
     local reader = require("ghost-reader")
     reader.setup()
-    assert.is_true(reader.open())
-    assert.same({ "toggle_controls" }, calls)
+    local original_select = vim.ui.select
+    vim.ui.select = function(_, opts, on_choice)
+      calls[#calls + 1] = opts.prompt
+      on_choice(nil, nil)
+    end
+    reader.open()
+    vim.ui.select = original_select
+    assert.same({ "load_history", "Select book:" }, calls)
   end)
 
   it("offers a mode picker for history and new-path selection but honors explicit statusline mode", function()

@@ -150,6 +150,29 @@ describe("session integration", function()
     session.stop()
   end)
 
+  it("keeps a hard-hidden mirror session hidden across an insert cycle", function()
+    local code_buf = helpers.new_normal_buffer({ "local value = 1" }, "lua")
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local book_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "placeholder" }, book_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(book_path, "overlay"))
+    assert.equal("mirror", session.get().view_name)
+    assert.is_true(session.hide("hard"))
+    assert.equal("HARD_HIDDEN", session.get().visibility)
+
+    vim.api.nvim_exec_autocmds("InsertEnter", { buffer = code_buf })
+    vim.api.nvim_exec_autocmds("InsertLeave", { buffer = code_buf })
+
+    assert.equal("HARD_HIDDEN", session.get().visibility)
+    session.stop()
+  end)
+
   it("exits controls on statusline buffer leave without hiding the float", function()
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()

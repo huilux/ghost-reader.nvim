@@ -3,6 +3,7 @@ local M = {}
 local actions = require("ghost-reader.actions")
 
 local plugin_prefix = "<Plug>(GhostReader"
+local installed_global_maps = {}
 
 local plug_defs = {
   Open = actions.open,
@@ -35,6 +36,27 @@ end
 
 local function del_map(mode, lhs, opts)
   pcall(vim.keymap.del, mode, resolve(lhs), opts or {})
+end
+
+local function find_global_map(lhs)
+  local expected = vim.api.nvim_replace_termcodes(resolve(lhs), true, false, true)
+  for _, map in ipairs(vim.api.nvim_get_keymap("n")) do
+    local actual = map.lhsraw or vim.api.nvim_replace_termcodes(map.lhs, true, false, true)
+    if actual == expected then
+      return map
+    end
+  end
+  return nil
+end
+
+local function clear_installed_global_maps()
+  for _, installed in pairs(installed_global_maps) do
+    local current = find_global_map(installed.lhs)
+    if current and current.rhs == installed.rhs then
+      del_map("n", installed.lhs)
+    end
+  end
+  installed_global_maps = {}
 end
 
 local function capture_map(buf, lhs)
@@ -71,6 +93,8 @@ function M.setup(config)
     bind_plug(name, action)
   end
 
+  clear_installed_global_maps()
+
   local global = config.keymaps and config.keymaps.global or {}
   local plug_map = {
     open = "Open",
@@ -83,7 +107,9 @@ function M.setup(config)
   for key, plug in pairs(plug_map) do
     local lhs = global[key]
     if lhs then
-      set_map("n", lhs, "<Plug>(GhostReader" .. plug .. ")", { desc = "Ghost Reader: " .. key })
+      local rhs = "<Plug>(GhostReader" .. plug .. ")"
+      set_map("n", lhs, rhs, { desc = "Ghost Reader: " .. key })
+      installed_global_maps[key] = { lhs = resolve(lhs), rhs = rhs }
     end
   end
 end

@@ -18,10 +18,10 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 
 | 快捷键 | 功能 |
 | --- | --- |
-| `<leader>rr` | 打开或恢复阅读会话 |
+| `<leader>rr` | 打开阅读会话 |
 | `<leader>rs` | 打开 statusline 阅读 |
 | `<leader>rm` | 进入或退出阅读控制层 |
-| `<leader>rh` | 隐藏或恢复当前会话 |
+| `<Esc><Esc>` | 隐藏或恢复当前会话 |
 | `<leader>rt` | 打开目录 |
 | `<leader>rq` | 关闭当前会话 |
 
@@ -37,10 +37,8 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 | `[[` | 上一章 |
 | `t` | 目录 |
 | `g%` | 进度 |
-| `gh` | 硬隐藏当前会话 |
 | `q` | 关闭当前会话 |
 | `?` | 帮助 |
-| `<Esc>` | 退出控制层 |
 
 statusline 模式还支持：
 
@@ -64,11 +62,11 @@ return {
     "GhostReaderToc",
   },
   keys = {
-    { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open or resume reading" },
+    { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
     { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
     { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
     { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
-    { "<leader>rh", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
+    { "<Esc><Esc>", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
     { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
   },
   opts = {
@@ -97,7 +95,7 @@ return {
         open = "<leader>rr",
         statusline = "<leader>rs",
         control = "<leader>rm",
-        hide = "<leader>rh",
+        hide = "<Esc><Esc>",
         toc = "<leader>rt",
         close = "<leader>rq",
       },
@@ -110,10 +108,10 @@ return {
         prev_chapter = "[[",
         toc = "t",
         progress = "g%",
-        hide = "gh",
+        hide = false,
         close = "q",
         help = "?",
-        exit_controls = "<Esc>",
+        exit_controls = false,
       },
       statusline = {
         toggle_auto = "a",
@@ -164,7 +162,9 @@ mirror：
 - 离开当前窗口；
 - 失去焦点。
 
-`gh` 是手动硬隐藏，它会恢复被接管的映射和控制层。`<Esc>` 只退出控制层，不会自动重新显示会话。
+`<Esc><Esc>` 会在显示与硬隐藏之间切换。隐藏会退出控制层并恢复被接管的按键；恢复 overlay 或 mirror 时会重新进入控制层，恢复 statusline 时则保持控制层关闭。单击 `<Esc>` 保留 Neovim 的原生行为，控制层只由 `<leader>rm` 切换。
+
+如果手动把 `keymaps.controls.exit_controls` 重新设为 `<Esc>`，这个 buffer-local 前缀映射会优先于全局 `<Esc><Esc>`；请同时为隐藏功能改用不以 `<Esc>` 开头的按键。
 
 ## 配置
 
@@ -198,7 +198,7 @@ require("ghost-reader").setup({
       open = "<leader>rr",
       statusline = "<leader>rs",
       control = "<leader>rm",
-      hide = "<leader>rh",
+      hide = "<Esc><Esc>",
       toc = "<leader>rt",
       close = "<leader>rq",
     },
@@ -211,10 +211,10 @@ require("ghost-reader").setup({
       prev_chapter = "[[",
       toc = "t",
       progress = "g%",
-      hide = "gh",
+      hide = false,
       close = "q",
       help = "?",
-      exit_controls = "<Esc>",
+      exit_controls = false,
     },
     statusline = {
       toggle_auto = "a",

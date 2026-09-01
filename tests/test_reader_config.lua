@@ -36,9 +36,10 @@ describe("reader config threading", function()
     assert.are.same(cfg, captured_opts)
   end)
 
-  it("restores a hidden session when open is called without a path", function()
+  it("opens the book selector when open is called without a path", function()
     local restored = 0
     local started = 0
+    local selected = 0
     package.loaded["ghost-reader.session"] = {
       get = function()
         return { visibility = "HARD_HIDDEN" }
@@ -59,8 +60,15 @@ describe("reader config threading", function()
 
     local reader = require("ghost-reader")
     reader.setup()
-    assert.is_true(reader.open())
-    assert.equal(1, restored)
+    local original_select = vim.ui.select
+    vim.ui.select = function(_, _, on_choice)
+      selected = selected + 1
+      on_choice(nil, nil)
+    end
+    reader.open()
+    vim.ui.select = original_select
+    assert.equal(1, selected)
+    assert.equal(0, restored)
     assert.equal(0, started)
   end)
 

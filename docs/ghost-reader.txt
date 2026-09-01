@@ -45,10 +45,10 @@ Requirements:
       "GhostReaderToc",
     },
     keys = {
-      { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open or resume reading" },
+      { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
       { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
       { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
-      { "<leader>rh", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
+      { "<Esc><Esc>", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
       { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
       { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
     },
@@ -78,7 +78,7 @@ Requirements:
           open = "<leader>rr",
           statusline = "<leader>rs",
           control = "<leader>rm",
-          hide = "<leader>rh",
+          hide = "<Esc><Esc>",
           toc = "<leader>rt",
           close = "<leader>rq",
         },
@@ -91,10 +91,10 @@ Requirements:
           prev_chapter = "[[",
           toc = "t",
           progress = "g%",
-          hide = "gh",
+          hide = false,
           close = "q",
           help = "?",
-          exit_controls = "<Esc>",
+          exit_controls = false,
         },
         statusline = {
           toggle_auto = "a",
@@ -142,10 +142,10 @@ statusline mode uses a one-line floating window at the bottom of the screen.
 
 Global mappings:
 
-  <leader>rr    Open or resume reading
+  <leader>rr    Open reading
   <leader>rs    Open statusline reader
   <leader>rm    Toggle reading controls
-  <leader>rh    Hide or restore the current session
+  <Esc><Esc>    Hide or restore the current session
   <leader>rt    Open the table of contents
   <leader>rq    Close the current session
 
@@ -159,10 +159,8 @@ Control layer mappings:
   [[            Previous chapter
   t             Table of contents
   g%            Show progress
-  gh            Hard hide session
   q             Close session
   ?             Help
-  <Esc>         Exit controls
 
 ==============================================================================
 7. Stealth events                                  |ghost-reader-stealth|
@@ -174,8 +172,15 @@ The stealth layer can hide the session automatically on:
   - Window leave
   - Focus lost
 
-`gh` performs a hard hide and restores the captured mappings. `<Esc>` only
-exits the control layer.
+`<Esc><Esc>` toggles between visible and hard-hidden states. Hiding exits the
+control layer and restores captured mappings. Restoring overlay or mirror
+re-enters controls; restoring statusline leaves controls inactive. A single
+`<Esc>` keeps its native Neovim behavior, and `<leader>rm` alone toggles the
+control layer.
+
+If `keymaps.controls.exit_controls` is explicitly set back to `<Esc>`, that
+buffer-local prefix takes precedence over the global `<Esc><Esc>` mapping.
+Configure hide to a sequence without the `<Esc>` prefix in that case.
 
 ==============================================================================
 8. Configuration                                   |ghost-reader-config|
@@ -210,7 +215,7 @@ exits the control layer.
         open = "<leader>rr",
         statusline = "<leader>rs",
         control = "<leader>rm",
-        hide = "<leader>rh",
+        hide = "<Esc><Esc>",
         toc = "<leader>rt",
         close = "<leader>rq",
       },
@@ -223,10 +228,10 @@ exits the control layer.
         prev_chapter = "[[",
         toc = "t",
         progress = "g%",
-        hide = "gh",
+        hide = false,
         close = "q",
         help = "?",
-        exit_controls = "<Esc>",
+        exit_controls = false,
       },
       statusline = {
         toggle_auto = "a",

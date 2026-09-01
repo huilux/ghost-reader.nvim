@@ -4,6 +4,10 @@ helpers.reset_modules()
 local mirror = require("ghost-reader.renderer.mirror")
 local buffer_seq = 0
 
+local function reader_rows(ctx)
+  return ctx.view_state.mirror.reader_rows or {}
+end
+
 local function make_context()
   vim.o.swapfile = false
   buffer_seq = buffer_seq + 1
@@ -27,7 +31,14 @@ local function make_context()
   return {
     target_buf = buf,
     target_win = win,
-    config = { reader = { visible_blocks = 3 } },
+    config = {
+      reader = { visible_blocks = 3 },
+      buffer = {
+        style = "light",
+        light = { visible_lines = 3, max_consecutive_lines = 3 },
+        strong = { visible_lines = 3, max_consecutive_lines = 1 },
+      },
+    },
     view_state = {},
     mode = "overlay",
     view_name = "mirror",
@@ -77,7 +88,14 @@ local function make_two_window_context()
     target_buf = target_buf,
     target_win = current_win,
     peer_win = peer_win,
-    config = { reader = { visible_blocks = 3 } },
+    config = {
+      reader = { visible_blocks = 3 },
+      buffer = {
+        style = "light",
+        light = { visible_lines = 3, max_consecutive_lines = 3 },
+        strong = { visible_lines = 3, max_consecutive_lines = 1 },
+      },
+    },
     view_state = {},
     mode = "overlay",
     view_name = "mirror",
@@ -95,6 +113,70 @@ describe("renderer.mirror", function()
     assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
     assert.is_true(mirror.render(ctx, { blocks = { { text = "page two", active = true } } }))
     assert.same(skeleton, ctx.view_state.mirror.skeleton)
+  end)
+
+  it("renders light style as a contiguous reading group", function()
+    local ctx = make_context()
+    ctx.config.buffer.light.max_consecutive_lines = 2
+    assert.is_true(mirror.start(ctx))
+    assert.is_true(mirror.render(ctx, {
+      blocks = {
+        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
+        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
+        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
+      },
+    }))
+    local rows = reader_rows(ctx)
+    assert.equal(3, #rows)
+    assert.equal(1, rows[2] - rows[1])
+    assert.is_true(rows[3] - rows[2] > 1)
+  end)
+
+  it("renders strong style as separated reading groups", function()
+    local ctx = make_context()
+    ctx.config.buffer.style = "strong"
+    assert.is_true(mirror.start(ctx))
+    assert.is_true(mirror.render(ctx, {
+      blocks = {
+        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
+        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
+        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
+      },
+    }))
+    local rows = reader_rows(ctx)
+    assert.equal(3, #rows)
+    assert.is_true(rows[2] - rows[1] > 1)
+    assert.is_true(rows[3] - rows[2] > 1)
+    local lines = vim.api.nvim_buf_get_lines(ctx.view_state.mirror.buf, 0, -1, false)
+    assert.is_truthy(lines[rows[1]]:match("one"))
+  end)
+
+  it("moves the cursor between rendered reading rows without stopping on skeleton code", function()
+    local ctx = make_context()
+    assert.is_true(mirror.start(ctx))
+    assert.is_true(mirror.render(ctx, {
+      blocks = {
+        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
+        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
+        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
+      },
+    }))
+    local rows = reader_rows(ctx)
+    assert.equal(rows[1], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
+    assert.is_true(mirror.render(ctx, {
+      blocks = {
+        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
+        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
+        { chapter_index = 1, line_index = 4, segment_index = 1, text = "four" },
+      },
+    }))
+    assert.equal(rows[2], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
+  end)
+
+  it("uses the configured visible line count as its page size", function()
+    local ctx = make_context()
+    ctx.config.buffer.light.visible_lines = 7
+    assert.equal(7, mirror.page_size(ctx))
   end)
 
   it("hide restores the real buffer and view", function()

@@ -207,6 +207,40 @@ describe("public api", function()
     }, opened)
   end)
 
+  it("offers buffer mode alongside overlay and statusline", function()
+    local modes = nil
+    package.loaded["ghost-reader.session"] = {
+      get = function() return nil end,
+      configure = function() end,
+      start = function() return true end,
+      stop = function() end,
+      toc = function() end,
+      dispatch = function() end,
+    }
+    package.loaded["ghost-reader.history"] = {
+      load = function() return { { name = "Book A", path = "/tmp/book-a.txt" } } end,
+    }
+    package.loaded["ghost-reader.keymaps"] = { setup = function() end }
+    package.loaded["ghost-reader.actions"] = {}
+
+    local original_select = vim.ui.select
+    vim.ui.select = function(items, opts, on_choice)
+      if opts.prompt == "Select mode:" then
+        modes = items
+        on_choice("mirror", 3)
+      else
+        on_choice(items[1], 1)
+      end
+    end
+
+    local reader = require("ghost-reader")
+    reader.setup()
+    reader.select_book()
+    vim.ui.select = original_select
+
+    assert.same({ "overlay", "statusline", "mirror" }, modes)
+  end)
+
   it("asks for a mode for explicit paths while statusline direct-open bypasses the picker", function()
     local prompts = {}
     local opened = {}

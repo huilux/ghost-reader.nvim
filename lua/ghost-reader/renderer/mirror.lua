@@ -4,9 +4,50 @@ local presets = require("ghost-reader.renderer.presets")
 
 local namespace_name = "GhostReaderMirror"
 
+local comment_prefixes = {
+  lua = { "-- ", "" },
+  python = { "# ", "" },
+  javascript = { "// ", "" },
+  typescript = { "// ", "" },
+  typescriptreact = { "// ", "" },
+  go = { "// ", "" },
+  rust = { "// ", "" },
+  java = { "// ", "" },
+  c = { "// ", "" },
+  cpp = { "// ", "" },
+  sh = { "# ", "" },
+  bash = { "# ", "" },
+  zsh = { "# ", "" },
+  markdown = { "<!-- ", " -->" },
+  html = { "<!-- ", " -->" },
+}
+
 local function state(ctx)
   ctx.view_state.mirror = ctx.view_state.mirror or {}
   return ctx.view_state.mirror
+end
+
+local function buffer_style_config(ctx)
+  local buffer = ctx.config and ctx.config.buffer or {}
+  local style = buffer.style or "light"
+  local style_config = buffer[style] or {}
+  local fallback = ctx.config and ctx.config.reader and ctx.config.reader.visible_blocks or 3
+  return style, style_config, fallback
+end
+
+local function comment_parts(filetype)
+  return unpack(comment_prefixes[filetype] or { "// ", "" })
+end
+
+local function position_key(position)
+  if not position or position.chapter_index == nil or position.line_index == nil then
+    return nil
+  end
+  return table.concat({ position.chapter_index, position.line_index, position.segment_index or 1 }, ":")
+end
+
+local function block_key(block)
+  return position_key(block and (block.position or block))
 end
 
 local function candidate_buffers()
@@ -44,7 +85,8 @@ local function pick_skeleton(ctx)
     }
   end
 
-  local preset = presets.get(ctx.config and ctx.config.reader and ctx.config.reader.preset or "random")
+  local buffer = ctx.config and ctx.config.buffer or {}
+  local preset = presets.get(buffer.preset or (ctx.config and ctx.config.reader and ctx.config.reader.preset) or "random")
   return {
     lines = vim.deepcopy(preset.lines),
     filetype = preset.filetype or "lua",
@@ -64,7 +106,8 @@ end
 
 local function visible_blocks(ctx, frame)
   local blocks = frame and frame.blocks or {}
-  local limit = ctx.config and ctx.config.reader and ctx.config.reader.visible_blocks or 3
+  local _, style_config, fallback = buffer_style_config(ctx)
+  local limit = style_config.visible_lines or fallback
   local visible = {}
   for i = 1, math.min(#blocks, limit) do
     visible[#visible + 1] = blocks[i]
@@ -72,8 +115,64 @@ local function visible_blocks(ctx, frame)
   return visible
 end
 
-local function wrap_block_text(text, width)
-  return utils.wrap_display(text or "", math.max(20, width))
+local function ensure_skeleton_size(lines, minimum)
+  while #lines < minimum do
+    lines[#lines + 1] = ""
+  end
+end
+
+local function group_sizes(count, max_consecutive)
+  local sizes = {}
+  local remaining = count
+  while remaining > 0 do
+    local size = math.min(max_consecutive, remaining)
+    sizes[#sizes + 1] = size
+    remaining = remaining - size
+  end
+  return sizes
+end
+
+local function light_rows(line_count, sizes)
+  local total = 0
+  for _, size in ipairs(sizes) do
+    total = total + size
+  end
+  local needed = total + math.max(0, #sizes - 1)
+  local start = math.max(1, math.floor((line_count - needed) / 2) + 1)
+  local rows = {}
+  local row = start
+  local index = 1
+  for group, size in ipairs(sizes) do
+    for _ = 1, size do
+      rows[index] = row
+      index = index + 1
+      row = row + 1
+    end
+    if group < #sizes then
+      row = row + 1
+    end
+  end
+  return rows
+end
+
+local function strong_rows(line_count, sizes)
+  local rows = {}
+  local previous_end = 0
+  local index = 1
+  for group, size in ipairs(sizes) do
+    local available = math.max(1, line_count - size)
+    local row = math.floor(available * group / (#sizes + 1)) + 1
+    row = math.max(row, previous_end + 2)
+    if row + size - 1 > line_count then
+      row = math.max(1, line_count - size + 1)
+    end
+    for offset = 0, size - 1 do
+      rows[index] = row + offset
+      index = index + 1
+    end
+    previous_end = row + size - 1
+  end
+  return rows
 end
 
 local function build_lines(ctx, frame)
@@ -85,26 +184,44 @@ local function build_lines(ctx, frame)
     lines = { "" }
   end
 
-  local positions = {}
-  local last = math.max(1, #lines)
-  for i = 1, #blocks do
-    positions[i] = math.max(1, math.floor((last - 1) * i / (#blocks + 1)) + 1)
+  local style, style_config, fallback = buffer_style_config(ctx)
+  local max_consecutive = math.min(style_config.max_consecutive_lines or #blocks, #blocks)
+  max_consecutive = math.max(1, max_consecutive > 0 and max_consecutive or fallback)
+  local sizes = group_sizes(#blocks, max_consecutive)
+  ensure_skeleton_size(lines, math.max(#lines, #blocks * 3 + 5))
+  local positions
+  if style == "strong" then
+    positions = strong_rows(#lines, sizes)
+  else
+    positions = light_rows(#lines, sizes)
   end
 
-  local width = math.max(20, (vim.api.nvim_win_get_width(ctx.target_win) or 80) - 4)
+  local prefix, suffix = comment_parts(skeleton.filetype)
+  local rows = {}
   for i, block in ipairs(blocks) do
-    local wrapped = wrap_block_text(block.text, width)
-    local pos = positions[i] or last
-    for j, segment in ipairs(wrapped) do
-      local line = segment
-      if block.active then
-        line = ">> " .. line
-      end
-      lines[pos + j - 1] = line
-    end
+    local row = positions[i] or #lines
+    rows[i] = row
+    lines[row] = prefix .. (block.text or "") .. suffix
   end
 
-  return lines
+  return lines, rows, blocks
+end
+
+local function activate(ctx, row)
+  local mirror = state(ctx)
+  if not mirror.buf or not vim.api.nvim_buf_is_valid(mirror.buf) or not row then
+    return false
+  end
+  mirror.highlight_namespace = mirror.highlight_namespace or vim.api.nvim_create_namespace(namespace_name .. "Active")
+  vim.api.nvim_set_hl(0, "GhostReaderMirrorActive", { link = "CursorLine", default = true })
+  vim.api.nvim_buf_clear_namespace(mirror.buf, mirror.highlight_namespace, 0, -1)
+  vim.api.nvim_buf_add_highlight(mirror.buf, mirror.highlight_namespace, "GhostReaderMirrorActive", row - 1, 0, -1)
+  if vim.api.nvim_win_is_valid(ctx.target_win) and vim.api.nvim_win_get_buf(ctx.target_win) == mirror.buf then
+    local cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
+    vim.api.nvim_win_set_cursor(ctx.target_win, { row, math.min(cursor[2], math.max(0, #(vim.api.nvim_buf_get_lines(mirror.buf, row - 1, row, false)[1] or "") - 1)) })
+  end
+  mirror.active_row = row
+  return true
 end
 
 local function save_view(ctx)
@@ -153,8 +270,6 @@ function M.start(ctx)
   mirror.namespace = mirror.namespace or vim.api.nvim_create_namespace(namespace_name)
   vim.api.nvim_set_current_win(ctx.target_win)
   vim.api.nvim_win_set_buf(ctx.target_win, mirror.buf)
-  vim.api.nvim_win_set_option(ctx.target_win, "number", false)
-  vim.api.nvim_win_set_option(ctx.target_win, "relativenumber", false)
   return true
 end
 
@@ -165,11 +280,35 @@ function M.render(ctx, frame)
       return false
     end
   end
-  local lines = build_lines(ctx, frame)
+  local blocks = visible_blocks(ctx, frame)
+  local current_key = block_key(blocks[1]) or position_key(frame and frame.position)
+  if current_key and mirror.rendered_by_key and mirror.rendered_by_key[current_key] then
+    return activate(ctx, mirror.rendered_by_key[current_key])
+  end
+
+  local lines, rows, rendered_blocks = build_lines(ctx, frame)
   vim.bo[mirror.buf].modifiable = true
   vim.api.nvim_buf_set_lines(mirror.buf, 0, -1, false, lines)
   vim.bo[mirror.buf].modifiable = false
+  mirror.reader_rows = rows
+  mirror.rendered_blocks = rendered_blocks
+  mirror.rendered_by_key = {}
+  for i, block in ipairs(rendered_blocks) do
+    local key = block_key(block)
+    if key then
+      mirror.rendered_by_key[key] = rows[i]
+    end
+  end
+  activate(ctx, rows[1])
   return true
+end
+
+function M.reader_buf(ctx)
+  local mirror = state(ctx)
+  if mirror.buf and vim.api.nvim_buf_is_valid(mirror.buf) then
+    return mirror.buf
+  end
+  return ctx.target_buf
 end
 
 function M.hide(ctx)
@@ -196,19 +335,32 @@ function M.stop(ctx)
     vim.api.nvim_buf_delete(mirror.buf, { force = true })
   end
   mirror.buf = nil
+  mirror.reader_rows = nil
+  mirror.rendered_blocks = nil
+  mirror.rendered_by_key = nil
+  mirror.active_row = nil
   return true
 end
 
 function M.page_size(ctx)
-  return ctx.config and ctx.config.reader and ctx.config.reader.visible_blocks or 3
+  local _, style_config, fallback = buffer_style_config(ctx)
+  return style_config.visible_lines or fallback
 end
 
 function M.segment_count(ctx, text)
-  return #utils.wrap_display(text or "", math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - 4))
+  local mirror = state(ctx)
+  local filetype = mirror.skeleton and mirror.skeleton.filetype or "lua"
+  local prefix, suffix = comment_parts(filetype)
+  local width = math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - #prefix - #suffix - 2)
+  return #utils.wrap_display(text or "", width)
 end
 
 function M.segment_text(ctx, text, index)
-  return utils.wrap_display(text or "", math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - 4))[index]
+  local mirror = state(ctx)
+  local filetype = mirror.skeleton and mirror.skeleton.filetype or "lua"
+  local prefix, suffix = comment_parts(filetype)
+  local width = math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - #prefix - #suffix - 2)
+  return utils.wrap_display(text or "", width)[index]
 end
 
 return M

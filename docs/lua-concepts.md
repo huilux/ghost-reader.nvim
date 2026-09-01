@@ -345,7 +345,7 @@ lua/ghost-reader/init.lua        ← 主模块：setup()、open()、open_statusl
         ├── renderer/            ← 内容渲染
         │   ├── init.lua         ← 调度器
         │   ├── overlay.lua      ← 真实 buffer 上的虚拟行覆盖
-        │   ├── mirror.lua       ← 回退用匿名 scratch buffer
+        │   ├── mirror.lua       ← buffer 伪装回退（light/strong）
         │   └── statusline.lua    ← 状态栏浮窗
         │
 ```

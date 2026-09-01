@@ -6,20 +6,22 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 2. Setup                                           |ghost-reader-setup|
 3. Commands                                        |ghost-reader-commands|
 4. Overlay                                         |ghost-reader-overlay|
-5. Statusline                                      |ghost-reader-statusline|
-6. Reading keys                                    |ghost-reader-keys|
-7. Stealth events                                  |ghost-reader-stealth|
-8. Configuration                                   |ghost-reader-config|
-9. Troubleshooting                                 |ghost-reader-troubleshooting|
+5. Buffer                                          |ghost-reader-buffer|
+6. Statusline                                      |ghost-reader-statusline|
+7. Reading keys                                    |ghost-reader-keys|
+8. Stealth events                                  |ghost-reader-stealth|
+9. Configuration                                   |ghost-reader-config|
+10. Troubleshooting                                |ghost-reader-troubleshooting|
 
 ==============================================================================
 1. Introduction                                    |ghost-reader-intro|
 
 ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
-with two user-facing modes:
+with three user-facing modes:
 
   - overlay: the default real-buffer extmark reader
   - statusline: a one-line floating reader above the native statusline
+  - mirror: a code-like scratch buffer with configurable disguise styles
 
 When overlay cannot attach cleanly, the plugin falls back to mirror
 automatically. That fallback keeps the session usable, but it is still only a
@@ -49,7 +51,7 @@ Requirements:
 
 The `keys` table belongs to lazy.nvim. It provides the single entry point that
 can load the plugin before a reading session exists. Every press selects a
-book and then selects overlay or statusline mode. After loading, Ghost Reader
+book and then selects overlay, statusline, or mirror mode. After loading, Ghost Reader
 registers the remaining global and buffer-local reading mappings, so they do
 not need to be duplicated in both `keys` and `opts.keymaps`.
 
@@ -74,7 +76,25 @@ overlay is the default mode.
     to mirror.
 
 ==============================================================================
-5. Statusline                                      |ghost-reader-statusline|
+5. Buffer                                          |ghost-reader-buffer|
+
+buffer mode uses an anonymous scratch buffer as a visual code disguise. The
+source buffer is saved and restored without changing its text or undo history.
+The renderer writes book lines as valid comments and keeps a stable code
+skeleton for the duration of the session.
+
+Two styles are available through `buffer.style`:
+
+  - light: reading lines are grouped together for easier reading
+  - strong: reading lines are distributed through the code skeleton
+
+`j` and `k` move the cursor between reading lines and skip skeleton code.
+`buffer.<style>.visible_lines` controls the number of book lines loaded in one
+view. `buffer.<style>.max_consecutive_lines` limits the number of adjacent book
+lines in each group. The defaults are light `6/6` and strong `3/1`.
+
+==============================================================================
+6. Statusline                                      |ghost-reader-statusline|
 
 statusline mode uses a one-line floating window above the native Vim or
 lualine statusline. It follows changes to `laststatus`, `cmdheight`, editor
@@ -86,7 +106,7 @@ size, and window layout without covering native status information.
   - Long text is wrapped by display width.
 
 ==============================================================================
-6. Reading keys                                    |ghost-reader-keys|
+7. Reading keys                                    |ghost-reader-keys|
 
 Global mappings:
 
@@ -109,7 +129,7 @@ Visible-reading mappings:
   ?             Help
 
 ==============================================================================
-7. Stealth events                                  |ghost-reader-stealth|
+8. Stealth events                                  |ghost-reader-stealth|
 
 The stealth layer can hide the session automatically on:
 
@@ -129,7 +149,7 @@ running. Overlay still soft-hides during Insert mode; hard hide events restore
 the captured Normal-mode mappings.
 
 ==============================================================================
-8. Configuration                                   |ghost-reader-config|
+9. Configuration                                   |ghost-reader-config|
 
 Every option below is optional. `keymaps.global` controls global mappings
 after the plugin loads. `keymaps.reader` and `keymaps.statusline` control
@@ -144,6 +164,18 @@ table under `opts`; call `setup()` directly only for a manual configuration.
       renderer = "overlay",
       visible_blocks = 3,
       mirror_fallback = true,
+    },
+    buffer = {
+      style = "light",
+      preset = "random",
+      light = {
+        visible_lines = 6,
+        max_consecutive_lines = 6,
+      },
+      strong = {
+        visible_lines = 3,
+        max_consecutive_lines = 1,
+      },
     },
     statusline = {
       interval = 3000,
@@ -193,7 +225,7 @@ table under `opts`; call `setup()` directly only for a manual configuration.
 <
 
 ==============================================================================
-9. Troubleshooting                                 |ghost-reader-troubleshooting|
+10. Troubleshooting                                |ghost-reader-troubleshooting|
 
 If `:GhostReaderStatusline` opens nothing, check that the current buffer is
 still valid and that another plugin has not replaced the window.

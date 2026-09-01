@@ -15,6 +15,28 @@ describe("config", function()
     assert.is_nil(cfg.data_dir)
   end)
 
+  it("returns configurable buffer styles", function()
+    local cfg = config.setup()
+    assert.equal("light", cfg.buffer.style)
+    assert.equal(6, cfg.buffer.light.visible_lines)
+    assert.equal(6, cfg.buffer.light.max_consecutive_lines)
+    assert.equal(3, cfg.buffer.strong.visible_lines)
+    assert.equal(1, cfg.buffer.strong.max_consecutive_lines)
+
+    local custom = config.setup({
+      buffer = {
+        style = "strong",
+        light = { visible_lines = 8, max_consecutive_lines = 4 },
+        strong = { visible_lines = 5, max_consecutive_lines = 2 },
+      },
+    })
+    assert.equal("strong", custom.buffer.style)
+    assert.equal(8, custom.buffer.light.visible_lines)
+    assert.equal(4, custom.buffer.light.max_consecutive_lines)
+    assert.equal(5, custom.buffer.strong.visible_lines)
+    assert.equal(2, custom.buffer.strong.max_consecutive_lines)
+  end)
+
   it("rejects legacy keys", function()
     assert.has_error(function() config.setup({ boss_key = {} }) end, "unknown config key: boss_key")
     assert.has_error(function() config.setup({ statusline = { mode = "manual" } }) end,
@@ -42,6 +64,11 @@ describe("config", function()
     assert.has_error(function() config.setup({ reader = { visible_blocks = 0 } }) end)
     assert.has_error(function() config.setup({ statusline = { interval = "fast" } }) end)
     assert.has_error(function() config.setup({ paths = { cache_dir = 42 } }) end)
+    assert.has_error(function() config.setup({ buffer = { style = "medium" } }) end)
+    assert.has_error(function() config.setup({ buffer = { light = { visible_lines = 0 } } }) end)
+    assert.has_error(function()
+      config.setup({ buffer = { strong = { visible_lines = 2, max_consecutive_lines = 3 } } })
+    end)
   end)
 
   it("rejects malformed section values", function()

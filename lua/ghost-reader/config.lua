@@ -6,6 +6,18 @@ local defaults = {
     visible_blocks = 3,
     mirror_fallback = true,
   },
+  buffer = {
+    style = "light",
+    preset = "random",
+    light = {
+      visible_lines = 6,
+      max_consecutive_lines = 6,
+    },
+    strong = {
+      visible_lines = 3,
+      max_consecutive_lines = 1,
+    },
+  },
   statusline = {
     interval = 3000,
     autoplay = true,
@@ -82,6 +94,13 @@ local function validate_value(value, expected, path)
     return
   end
 
+  if expected == "buffer_style" then
+    if value ~= "light" and value ~= "strong" then
+      error("invalid config value at " .. path .. ": expected light or strong")
+    end
+    return
+  end
+
   if expected == "mapping" then
     if not (type(value) == "string" or value == false) then
       error("invalid config value at " .. path .. ": expected string or false")
@@ -128,6 +147,33 @@ local function validate_schema(user_config)
   end
   if reader.mirror_fallback ~= nil then
     validate_value(reader.mirror_fallback, "boolean", "reader.mirror_fallback")
+  end
+
+  if user_config.buffer ~= nil and type(user_config.buffer) ~= "table" then
+    error("invalid config value at buffer: expected table")
+  end
+  local buffer = user_config.buffer or {}
+  if buffer.style ~= nil then
+    validate_value(buffer.style, "buffer_style", "buffer.style")
+  end
+  if buffer.preset ~= nil then
+    validate_value(buffer.preset, "string", "buffer.preset")
+  end
+  for _, style in ipairs({ "light", "strong" }) do
+    if buffer[style] ~= nil and type(buffer[style]) ~= "table" then
+      error("invalid config value at buffer." .. style .. ": expected table")
+    end
+    local style_config = buffer[style] or {}
+    if style_config.visible_lines ~= nil then
+      validate_value(style_config.visible_lines, "positive_integer", "buffer." .. style .. ".visible_lines")
+    end
+    if style_config.max_consecutive_lines ~= nil then
+      validate_value(style_config.max_consecutive_lines, "positive_integer", "buffer." .. style .. ".max_consecutive_lines")
+    end
+    if style_config.visible_lines ~= nil and style_config.max_consecutive_lines ~= nil
+      and style_config.max_consecutive_lines > style_config.visible_lines then
+      error("invalid config value at buffer." .. style .. ".max_consecutive_lines: cannot exceed visible_lines")
+    end
   end
 
   if user_config.statusline ~= nil and type(user_config.statusline) ~= "table" then

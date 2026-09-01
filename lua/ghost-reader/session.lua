@@ -88,6 +88,19 @@ local function make_renderer_ctx()
   return active.ctx
 end
 
+local function reader_buffer(session)
+  if not session then
+    return nil
+  end
+  if session.mode == "statusline" then
+    return vim.api.nvim_get_current_buf()
+  end
+  if session.renderer and session.renderer.reader_buf then
+    return session.renderer.reader_buf(session.ctx)
+  end
+  return session.target_buf
+end
+
 local function render_current()
   if not active then
     return false
@@ -277,7 +290,7 @@ local function open_book(path, mode)
   set_state(tentative)
   setup_autocmds()
   history.record(book.path, cfg)
-  keymaps.attach(active, cfg, target_buf)
+  keymaps.attach(active, cfg, reader_buffer(active))
   active.visibility = "VISIBLE"
   return true
 end
@@ -354,8 +367,7 @@ function M.restore()
     return false
   end
   active.hidden_policy = nil
-  local reader_buf = active.mode == "statusline" and vim.api.nvim_get_current_buf() or active.target_buf
-  keymaps.attach(active, active.config, reader_buf)
+  keymaps.attach(active, active.config, reader_buffer(active))
   return true
 end
 

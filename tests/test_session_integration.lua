@@ -48,8 +48,56 @@ describe("session integration", function()
     session.configure(cfg)
     assert.is_true(session.start(book_path, "overlay"))
     assert.equal("mirror", session.get().view_name)
+    assert.equal(session.get().ctx.view_state.mirror.buf, session.get().reader_buf)
     assert.equal("overlay", session.get().mode)
     session.stop()
+  end)
+
+  it("moves mirror cursor between reading rows and refreshes at page boundaries", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = {
+            { title = "One", lines = { "one", "two", "three", "four" } },
+          },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      reader = { renderer = "mirror" },
+      buffer = {
+        style = "strong",
+        strong = { visible_lines = 3, max_consecutive_lines = 1 },
+      },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local target = helpers.new_normal_buffer({ "local value = 1" }, "lua")
+    local book_path = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile({ "one", "two", "three", "four" }, book_path)
+
+    session.configure(cfg)
+    assert.is_true(session.start(book_path, "mirror"))
+    local current = session.get()
+    local rows = current.ctx.view_state.mirror.reader_rows
+    assert.equal(rows[1], vim.api.nvim_win_get_cursor(current.target_win)[1])
+
+    assert.is_true(session.dispatch("next_content"))
+    assert.equal(rows[2], vim.api.nvim_win_get_cursor(current.target_win)[1])
+    assert.is_true(session.dispatch("prev_content"))
+    assert.equal(rows[1], vim.api.nvim_win_get_cursor(current.target_win)[1])
+
+    assert.is_true(session.dispatch("next_page"))
+    assert.equal(4, session.get().position.line_index)
+    local refreshed_rows = current.ctx.view_state.mirror.reader_rows
+    local refreshed_line = vim.api.nvim_buf_get_lines(current.ctx.view_state.mirror.buf, refreshed_rows[1] - 1, refreshed_rows[1], false)[1]
+    assert.is_truthy(refreshed_line:match("four"))
+    session.stop()
+    assert.is_true(vim.api.nvim_buf_is_valid(target))
   end)
 
   it("dispatches page and chapter navigation and reports eof as false", function()
@@ -74,6 +122,9 @@ describe("session integration", function()
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({
       reader = { visible_blocks = 1 },
+      buffer = {
+        light = { visible_lines = 1, max_consecutive_lines = 1 },
+      },
       paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
     })
     local book_path = vim.fn.tempname() .. ".txt"
@@ -131,6 +182,12 @@ describe("session integration", function()
   end)
 
   it("applies overlay autocmd soft and hard hide transitions", function()
+    local code_buf = vim.api.nvim_create_buf(false, false)
+    vim.bo[code_buf].swapfile = false
+    vim.api.nvim_buf_set_name(code_buf, vim.fn.tempname() .. ".lua")
+    vim.api.nvim_buf_set_lines(code_buf, 0, -1, false, { "local value = 1" })
+    vim.bo[code_buf].filetype = "lua"
+    vim.api.nvim_set_current_buf(code_buf)
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({

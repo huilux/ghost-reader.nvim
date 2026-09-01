@@ -38,73 +38,21 @@ Requirements:
     "huilux/ghost-reader.nvim",
     cmd = {
       "GhostReader",
-      "GhostReaderClose",
-      "GhostReaderControl",
-      "GhostReaderHide",
       "GhostReaderStatusline",
-      "GhostReaderToc",
     },
     keys = {
       { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
       { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
-      { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
-      { "<Esc><Esc>", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
-      { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
-      { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
     },
-    opts = {
-      reader = {
-        renderer = "overlay",
-        visible_blocks = 3,
-        mirror_fallback = true,
-      },
-      statusline = {
-        interval = 3000,
-        autoplay = true,
-        page_step = 5,
-      },
-      stealth = {
-        hide_on_focus_lost = true,
-        silent = true,
-        overlay = {
-          hide_on_insert = true,
-          hide_on_buf_leave = true,
-          hide_on_win_leave = true,
-        },
-      },
-      paths = {},
-      keymaps = {
-        global = {
-          open = "<leader>rr",
-          statusline = "<leader>rs",
-          control = "<leader>rm",
-          hide = "<Esc><Esc>",
-          toc = "<leader>rt",
-          close = "<leader>rq",
-        },
-        controls = {
-          next_content = "j",
-          prev_content = "k",
-          next_page = "<C-f>",
-          prev_page = "<C-b>",
-          next_chapter = "]]",
-          prev_chapter = "[[",
-          toc = "t",
-          progress = "g%",
-          hide = false,
-          close = "q",
-          help = "?",
-          exit_controls = false,
-        },
-        statusline = {
-          toggle_auto = "a",
-          faster = "+",
-          slower = "-",
-        },
-      },
-    },
+    opts = {},
   }
 <
+
+The `keys` table belongs to lazy.nvim. It provides only the two entry points
+that can load the plugin before a reading session exists. After loading,
+Ghost Reader registers the remaining global mappings and the buffer-local
+control mappings from its defaults, so those mappings do not need to be
+duplicated in both `keys` and `opts.keymaps`.
 
 ==============================================================================
 3. Commands                                        |ghost-reader-commands|
@@ -184,6 +132,14 @@ Configure hide to a sequence without the `<Esc>` prefix in that case.
 
 ==============================================================================
 8. Configuration                                   |ghost-reader-config|
+
+Every option below is optional. `keymaps.global` controls global mappings
+after the plugin loads. `keymaps.controls` and `keymaps.statusline` control
+buffer-local mappings inside a reading session. When changing `global.open`
+or `global.statusline`, update the matching lazy.nvim `keys` entry as well so
+the first key press can load the plugin. With lazy.nvim, place the contents of
+the `setup({ ... })` table under `opts`; call `setup()` directly only for a
+manual configuration.
 
 >lua
   require("ghost-reader").setup({

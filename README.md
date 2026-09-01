@@ -14,39 +14,39 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 
 插件把快捷键分成全局入口和阅读控制层两部分。
 
-全局入口建议在插件管理器里配置，适用于任何 buffer：
+插件加载后，可以在任何 buffer 使用以下全局快捷键：
 
-| 快捷键 | 功能 |
-| --- | --- |
-| `<leader>rr` | 打开阅读会话 |
+| 快捷键       | 功能                 |
+| ------------ | -------------------- |
+| `<leader>rr` | 打开阅读会话         |
 | `<leader>rs` | 打开 statusline 阅读 |
 | `<leader>rm` | 进入或退出阅读控制层 |
-| `<Esc><Esc>` | 隐藏或恢复当前会话 |
-| `<leader>rt` | 打开目录 |
-| `<leader>rq` | 关闭当前会话 |
+| `<Esc><Esc>` | 隐藏或恢复当前会话   |
+| `<leader>rt` | 打开目录             |
+| `<leader>rq` | 关闭当前会话         |
 
 阅读控制层在阅读 buffer 内生效，overlay、mirror 和 statusline 使用同一组语义：
 
-| 快捷键 | 功能 |
-| --- | --- |
-| `j` | 下一段内容 |
-| `k` | 上一段内容 |
-| `<C-f>` | 下一页 |
-| `<C-b>` | 上一页 |
-| `]]` | 下一章 |
-| `[[` | 上一章 |
-| `t` | 目录 |
-| `g%` | 进度 |
-| `q` | 关闭当前会话 |
-| `?` | 帮助 |
+| 快捷键  | 功能         |
+| ------- | ------------ |
+| `j`     | 下一段内容   |
+| `k`     | 上一段内容   |
+| `<C-f>` | 下一页       |
+| `<C-b>` | 上一页       |
+| `]]`    | 下一章       |
+| `[[`    | 上一章       |
+| `t`     | 目录         |
+| `g%`    | 进度         |
+| `q`     | 关闭当前会话 |
+| `?`     | 帮助         |
 
 statusline 模式还支持：
 
-| 快捷键 | 功能 |
-| --- | --- |
-| `a` | 切换自动/手动 |
-| `+` | 加快自动翻页 |
-| `-` | 减慢自动翻页 |
+| 快捷键 | 功能          |
+| ------ | ------------- |
+| `a`    | 切换自动/手动 |
+| `+`    | 加快自动翻页  |
+| `-`    | 减慢自动翻页  |
 
 ## 安装
 
@@ -55,84 +55,28 @@ return {
   "huilux/ghost-reader.nvim",
   cmd = {
     "GhostReader",
-    "GhostReaderClose",
-    "GhostReaderControl",
-    "GhostReaderHide",
     "GhostReaderStatusline",
-    "GhostReaderToc",
   },
   keys = {
     { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
     { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
-    { "<leader>rq", function() require("ghost-reader").close() end, desc = "Close reading session" },
-    { "<leader>rm", function() require("ghost-reader.actions").control() end, desc = "Toggle reading controls" },
-    { "<Esc><Esc>", function() require("ghost-reader.actions").hide() end, desc = "Hide or restore session" },
-    { "<leader>rt", function() require("ghost-reader").toc() end, desc = "Open table of contents" },
   },
-  opts = {
-    reader = {
-      renderer = "overlay",
-      visible_blocks = 3,
-      mirror_fallback = true,
-    },
-    statusline = {
-      interval = 3000,
-      autoplay = true,
-      page_step = 5,
-    },
-    stealth = {
-      hide_on_focus_lost = true,
-      silent = true,
-      overlay = {
-        hide_on_insert = true,
-        hide_on_buf_leave = true,
-        hide_on_win_leave = true,
-      },
-    },
-    paths = {},
-    keymaps = {
-      global = {
-        open = "<leader>rr",
-        statusline = "<leader>rs",
-        control = "<leader>rm",
-        hide = "<Esc><Esc>",
-        toc = "<leader>rt",
-        close = "<leader>rq",
-      },
-      controls = {
-        next_content = "j",
-        prev_content = "k",
-        next_page = "<C-f>",
-        prev_page = "<C-b>",
-        next_chapter = "]]",
-        prev_chapter = "[[",
-        toc = "t",
-        progress = "g%",
-        hide = false,
-        close = "q",
-        help = "?",
-        exit_controls = false,
-      },
-      statusline = {
-        toggle_auto = "a",
-        faster = "+",
-        slower = "-",
-      },
-    },
-  },
+  opts = {},
 }
 ```
 
+这里的 `keys` 属于 lazy.nvim，只负责在插件尚未加载时提供两个“打开阅读”的入口。插件加载后，其他全局快捷键以及阅读控制层快捷键由 Ghost Reader 根据内置默认值注册，因此不需要在 `keys` 和 `opts.keymaps` 中重复写一遍。
+
 ## 命令
 
-| 命令 | 功能 |
-| --- | --- |
-| `:GhostReader [path]` | 打开书籍；无参数时选择历史记录 |
-| `:GhostReaderClose` | 关闭当前会话 |
-| `:GhostReaderControl` | 进入或退出阅读控制层 |
-| `:GhostReaderHide` | 硬隐藏或恢复当前会话 |
-| `:GhostReaderStatusline [path]` | 以 statusline 模式打开 |
-| `:GhostReaderToc` | 打开目录 |
+| 命令                            | 功能                           |
+| ------------------------------- | ------------------------------ |
+| `:GhostReader [path]`           | 打开书籍；无参数时选择历史记录 |
+| `:GhostReaderClose`             | 关闭当前会话                   |
+| `:GhostReaderControl`           | 进入或退出阅读控制层           |
+| `:GhostReaderHide`              | 硬隐藏或恢复当前会话           |
+| `:GhostReaderStatusline [path]` | 以 statusline 模式打开         |
+| `:GhostReaderToc`               | 打开目录                       |
 
 ## 阅读模式
 
@@ -167,6 +111,8 @@ mirror：
 如果手动把 `keymaps.controls.exit_controls` 重新设为 `<Esc>`，这个 buffer-local 前缀映射会优先于全局 `<Esc><Esc>`；请同时为隐藏功能改用不以 `<Esc>` 开头的按键。
 
 ## 配置
+
+下面是完整配置参考，所有字段都可以省略。使用 lazy.nvim 时，请把 `setup({ ... })` 中的表内容放到插件规格的 `opts` 中；只有手动配置插件时才直接调用 `setup()`。`keymaps.global` 控制插件加载后的全局快捷键，`keymaps.controls` 和 `keymaps.statusline` 控制阅读会话中的 buffer-local 快捷键。如果修改 `global.open` 或 `global.statusline`，还应同步修改安装配置中 lazy.nvim 的对应 `keys`，保证首次按键能够加载插件。
 
 ```lua
 require("ghost-reader").setup({

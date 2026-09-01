@@ -173,7 +173,12 @@ describe("session integration", function()
     session.stop()
   end)
 
-  it("exits controls on statusline buffer leave without hiding the float", function()
+  it("moves visible statusline reader mappings to the current buffer", function()
+    local function maparg_in_buf(buf, lhs)
+      return vim.api.nvim_buf_call(buf, function()
+        return vim.fn.maparg(lhs, "n", false, true)
+      end)
+    end
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({
@@ -182,12 +187,21 @@ describe("session integration", function()
     local book_path = vim.fn.tempname() .. ".txt"
     vim.fn.writefile({ "placeholder" }, book_path)
 
+    local first = helpers.new_normal_buffer({ "one" })
+    vim.keymap.set("n", "j", "gj", { buffer = first, desc = "first j" })
     session.configure(cfg)
     assert.is_true(session.start(book_path, "statusline"))
-    assert.equal("INACTIVE", session.get().controls)
-    vim.api.nvim_exec_autocmds("BufLeave", {})
+    assert.equal("Ghost Reader: next content", maparg_in_buf(first, "j").desc)
+
+    local second = helpers.new_normal_buffer({ "two" })
     assert.equal("VISIBLE", session.get().visibility)
-    assert.equal("INACTIVE", session.get().controls)
+    assert.equal("gj", maparg_in_buf(first, "j").rhs)
+    assert.equal("Ghost Reader: next content", maparg_in_buf(second, "j").desc)
+
+    assert.is_true(session.hide("hard"))
+    assert.same({}, maparg_in_buf(second, "j"))
+    assert.is_true(session.restore())
+    assert.equal("Ghost Reader: next content", maparg_in_buf(second, "j").desc)
     session.stop()
   end)
 

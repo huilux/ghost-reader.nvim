@@ -112,6 +112,59 @@ describe("renderer.statusline", function()
     assert.is_equal("abc", renderer.segment_text(ctx, "abc", 1))
   end)
 
+  it("keeps the reader row above command lines and the native statusline", function()
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    local original_laststatus = vim.o.laststatus
+    local original_cmdheight = vim.o.cmdheight
+    vim.uv.new_timer = function()
+      return timer
+    end
+
+    vim.o.laststatus = 2
+    vim.o.cmdheight = 1
+    assert.is_true(renderer.render(ctx, { blocks = { { text = "hello", active = true } } }))
+    local win = ctx.view_state.statusline.win
+    assert.equal(vim.o.lines - 3, vim.api.nvim_win_get_config(win).row)
+
+    vim.o.laststatus = 0
+    vim.o.cmdheight = 2
+    assert.is_true(renderer.resize(ctx))
+    assert.equal(vim.o.lines - 3, vim.api.nvim_win_get_config(win).row)
+
+    renderer.stop(ctx)
+    vim.o.laststatus = original_laststatus
+    vim.o.cmdheight = original_cmdheight
+  end)
+
+  it("counts only ordinary windows when laststatus is conditional", function()
+    vim.cmd("only")
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    local original_laststatus = vim.o.laststatus
+    local original_cmdheight = vim.o.cmdheight
+    vim.uv.new_timer = function()
+      return timer
+    end
+
+    vim.o.laststatus = 1
+    vim.o.cmdheight = 1
+    assert.is_true(renderer.render(ctx, { blocks = { { text = "hello", active = true } } }))
+    local win = ctx.view_state.statusline.win
+    assert.equal(vim.o.lines - 2, vim.api.nvim_win_get_config(win).row)
+
+    vim.cmd("split")
+    assert.is_true(renderer.resize(ctx))
+    assert.equal(vim.o.lines - 3, vim.api.nvim_win_get_config(win).row)
+
+    renderer.stop(ctx)
+    vim.cmd("only")
+    vim.o.laststatus = original_laststatus
+    vim.o.cmdheight = original_cmdheight
+  end)
+
   it("clamps speed changes and toggles autoplay", function()
     local renderer = fresh_renderer()
     local ctx = make_context()

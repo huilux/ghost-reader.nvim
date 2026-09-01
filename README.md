@@ -5,27 +5,25 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 这个插件有两个面向用户的阅读模式：
 
 - overlay 是默认模式，使用真实 buffer 上的 extmark 虚拟行显示内容，不改写文件内容、文件名、`modified` 状态或 undo 历史。
-- statusline 是底部的一行浮窗，一次显示一段文本，适合边写代码边低调阅读。
+- statusline 是原生状态栏上方的一行浮窗，一次显示一段文本。
 - 当 overlay 不能直接接管目标窗口时，插件会自动回退到 mirror。
 
 视觉上的伪装只是界面层面的效果，不是安全边界。
 
 ## 快捷键
 
-插件把快捷键分成全局入口和阅读控制层两部分。
+插件只有“阅读可见”和“硬隐藏”两种操作状态。阅读可见时接管配置过的阅读键，硬隐藏后恢复原有映射。
 
 插件加载后，可以在任何 buffer 使用以下全局快捷键：
 
 | 快捷键       | 功能                 |
 | ------------ | -------------------- |
-| `<leader>rr` | 打开阅读会话         |
-| `<leader>rs` | 打开 statusline 阅读 |
-| `<leader>rm` | 进入或退出阅读控制层 |
-| `<Esc><Esc>` | 隐藏或恢复当前会话   |
+| `<leader>rr` | 选择书籍和阅读模式   |
+| `<Esc><Esc>` | 硬隐藏或恢复当前会话 |
 | `<leader>rt` | 打开目录             |
 | `<leader>rq` | 关闭当前会话         |
 
-阅读控制层在阅读 buffer 内生效，overlay、mirror 和 statusline 使用同一组语义：
+以下映射在阅读可见时生效，overlay、mirror 和 statusline 使用同一组语义。没有配置成阅读键的按键仍保留 Neovim 原生行为：
 
 | 快捷键  | 功能         |
 | ------- | ------------ |
@@ -59,24 +57,22 @@ return {
   },
   keys = {
     { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
-    { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
   },
   opts = {},
 }
 ```
 
-这里的 `keys` 属于 lazy.nvim，只负责在插件尚未加载时提供两个“打开阅读”的入口。插件加载后，其他全局快捷键以及阅读控制层快捷键由 Ghost Reader 根据内置默认值注册，因此不需要在 `keys` 和 `opts.keymaps` 中重复写一遍。
+这里的 `keys` 属于 lazy.nvim，只负责在插件尚未加载时提供统一入口。每次按 `<leader>rr` 都会依次选择书籍和 `overlay`/`statusline` 模式；重复打开会安全替换当前会话。插件加载后，其他全局快捷键和阅读键由 Ghost Reader 注册，不需要在 `keys` 和 `opts.keymaps` 中重复配置。
 
 ## 命令
 
-| 命令                            | 功能                           |
-| ------------------------------- | ------------------------------ |
-| `:GhostReader [path]`           | 打开书籍；无参数时选择历史记录 |
-| `:GhostReaderClose`             | 关闭当前会话                   |
-| `:GhostReaderControl`           | 进入或退出阅读控制层           |
-| `:GhostReaderHide`              | 硬隐藏或恢复当前会话           |
-| `:GhostReaderStatusline [path]` | 以 statusline 模式打开         |
-| `:GhostReaderToc`               | 打开目录                       |
+| 命令                            | 功能                       |
+| ------------------------------- | -------------------------- |
+| `:GhostReader [path]`           | 选择书籍（可选）和阅读模式 |
+| `:GhostReaderClose`             | 关闭当前会话               |
+| `:GhostReaderHide`              | 硬隐藏或恢复当前会话       |
+| `:GhostReaderStatusline [path]` | 以 statusline 模式打开     |
+| `:GhostReaderToc`               | 打开目录                   |
 
 ## 阅读模式
 
@@ -88,9 +84,10 @@ overlay：
 
 statusline：
 
-- 底部一行浮窗。
+- 位于 Vim/lualine 原生状态栏上方，不遮挡原生状态信息。
 - 支持自动翻页和手动翻页。
 - 长文本会按窗口宽度切段显示。
+- 阅读可见时，阅读映射会跟随当前 buffer。
 
 mirror：
 
@@ -106,13 +103,13 @@ mirror：
 - 离开当前窗口；
 - 失去焦点。
 
-`<Esc><Esc>` 会在显示与硬隐藏之间切换。隐藏会退出控制层并恢复被接管的按键；恢复 overlay 或 mirror 时会重新进入控制层，恢复 statusline 时则保持控制层关闭。单击 `<Esc>` 保留 Neovim 的原生行为，控制层只由 `<leader>rm` 切换。
+`<Esc><Esc>` 会在显示与硬隐藏之间切换。硬隐藏会恢复被接管的原始映射；恢复后阅读映射立即重新生效。单击 `<Esc>` 保留 Neovim 的原生行为。statusline 可见时切换 buffer 或窗口，旧 buffer 会恢复原映射，新 buffer 会接管阅读键，浮窗和自动翻页保持运行。
 
-如果手动把 `keymaps.controls.exit_controls` 重新设为 `<Esc>`，这个 buffer-local 前缀映射会优先于全局 `<Esc><Esc>`；请同时为隐藏功能改用不以 `<Esc>` 开头的按键。
+overlay 在进入插入模式时仍使用软隐藏：阅读内容暂时消失，但插入模式可正常编码；离开插入模式后自动恢复。失去焦点或离开目标 buffer/window 引发的硬隐藏则会恢复阅读键。
 
 ## 配置
 
-下面是完整配置参考，所有字段都可以省略。使用 lazy.nvim 时，请把 `setup({ ... })` 中的表内容放到插件规格的 `opts` 中；只有手动配置插件时才直接调用 `setup()`。`keymaps.global` 控制插件加载后的全局快捷键，`keymaps.controls` 和 `keymaps.statusline` 控制阅读会话中的 buffer-local 快捷键。如果修改 `global.open` 或 `global.statusline`，还应同步修改安装配置中 lazy.nvim 的对应 `keys`，保证首次按键能够加载插件。
+下面是完整配置参考，所有字段都可以省略。使用 lazy.nvim 时，请把 `setup({ ... })` 中的表内容放到插件规格的 `opts` 中；只有手动配置插件时才直接调用 `setup()`。`keymaps.global` 控制插件加载后的全局快捷键，`keymaps.reader` 和 `keymaps.statusline` 控制阅读可见时的 buffer-local 快捷键。修改 `global.open` 时还应同步修改 lazy.nvim 的 `keys`，保证首次按键能够加载插件。
 
 ```lua
 require("ghost-reader").setup({
@@ -142,13 +139,11 @@ require("ghost-reader").setup({
   keymaps = {
     global = {
       open = "<leader>rr",
-      statusline = "<leader>rs",
-      control = "<leader>rm",
       hide = "<Esc><Esc>",
       toc = "<leader>rt",
       close = "<leader>rq",
     },
-    controls = {
+    reader = {
       next_content = "j",
       prev_content = "k",
       next_page = "<C-f>",
@@ -160,7 +155,6 @@ require("ghost-reader").setup({
       hide = false,
       close = "q",
       help = "?",
-      exit_controls = false,
     },
     statusline = {
       toggle_auto = "a",

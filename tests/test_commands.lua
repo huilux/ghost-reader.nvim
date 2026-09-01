@@ -20,7 +20,6 @@ describe("commands", function()
       toc = function() end,
     }
     package.loaded["ghost-reader.actions"] = {
-      control = function() end,
       hide = function() end,
     }
 
@@ -32,7 +31,6 @@ describe("commands", function()
     assert.same({
       "GhostReader",
       "GhostReaderClose",
-      "GhostReaderControl",
       "GhostReaderHide",
       "GhostReaderStatusline",
       "GhostReaderToc",

@@ -13,19 +13,11 @@ local default_config = require("ghost-reader.config").setup()
 local state = {
   lifecycle = "IDLE",
   visibility = "IDLE",
-  controls = "INACTIVE",
   generation = 0,
 }
 
 local active = nil
 M.state = state
-
-local function ensure_state()
-  state.lifecycle = state.lifecycle or "IDLE"
-  state.visibility = state.visibility or "IDLE"
-  state.controls = state.controls or "INACTIVE"
-  return state
-end
 
 local function clone(tbl)
   return vim.deepcopy(tbl)
@@ -123,46 +115,96 @@ local function setup_autocmds()
   end
   active.autocmd_group = vim.api.nvim_create_augroup("ghost-reader-session-" .. active.generation, { clear = true })
 
-  local function autocmd(events, callback)
+  local target_buf = active.target_buf
+  local generation = active.generation
+
+  local function is_current_session()
+    return active and active.generation == generation and not active.transitioning
+  end
+
+  local reflow_pending = false
+  local function schedule_statusline_reflow()
+    if reflow_pending then
+      return
+    end
+    reflow_pending = true
+    vim.schedule(function()
+      reflow_pending = false
+      if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
+        render_current()
+      end
+    end)
+  end
+
+  local function target_autocmd(events, callback)
     vim.api.nvim_create_autocmd(events, {
       group = active.autocmd_group,
-      buffer = active.control_buf,
+      buffer = target_buf,
       callback = callback,
     })
   end
 
-  autocmd("InsertEnter", function()
-    if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_insert then
+  target_autocmd("InsertEnter", function()
+    if is_current_session() and active.mode == "overlay" and active.config.stealth.overlay.hide_on_insert then
       M.hide("soft")
     end
   end)
 
-  autocmd("InsertLeave", function()
-    if active and active.visibility == "SOFT_HIDDEN" and active.mode == "overlay" then
+  target_autocmd("InsertLeave", function()
+    if is_current_session() and active.visibility == "SOFT_HIDDEN" and active.mode == "overlay" then
       M.restore()
     end
   end)
 
-  autocmd("BufLeave", function()
-    if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_buf_leave then
-      M.hide("hard")
-    elseif active and active.mode == "statusline" and active.controls == "ACTIVE" then
-      keymaps.leave_controls(active)
-      active.controls = "INACTIVE"
-    end
-  end)
-
-  autocmd("WinLeave", function()
-    if active and active.mode == "overlay" and active.config.stealth.overlay.hide_on_win_leave then
+  target_autocmd("BufLeave", function()
+    if is_current_session() and active.visibility == "VISIBLE" and active.mode == "overlay" and active.config.stealth.overlay.hide_on_buf_leave then
       M.hide("hard")
     end
   end)
 
-  autocmd("FocusLost", function()
-    if active and active.config.stealth.hide_on_focus_lost then
+  target_autocmd("WinLeave", function()
+    if is_current_session() and active.visibility == "VISIBLE" and active.mode == "overlay" and active.config.stealth.overlay.hide_on_win_leave then
       M.hide("hard")
     end
   end)
+
+  vim.api.nvim_create_autocmd("BufLeave", {
+    group = active.autocmd_group,
+    callback = function()
+      if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
+        keymaps.detach(active)
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+    group = active.autocmd_group,
+    callback = function()
+      if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
+        keymaps.attach(active, active.config, vim.api.nvim_get_current_buf())
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd({ "VimResized", "WinResized", "WinNew", "WinClosed" }, {
+    group = active.autocmd_group,
+    callback = schedule_statusline_reflow,
+  })
+
+  vim.api.nvim_create_autocmd("OptionSet", {
+    group = active.autocmd_group,
+    pattern = { "cmdheight", "laststatus" },
+    callback = schedule_statusline_reflow,
+  })
+
+  vim.api.nvim_create_autocmd("FocusLost", {
+    group = active.autocmd_group,
+    callback = function()
+      if is_current_session() and active.config.stealth.hide_on_focus_lost then
+        M.hide("hard")
+      end
+    end,
+  })
 
   vim.api.nvim_create_autocmd("QuitPre", {
     group = active.autocmd_group,
@@ -182,11 +224,11 @@ local function open_book(path, mode)
 
   local previous = active
   local requested_mode = mode or cfg.reader.renderer or "overlay"
-  local control_buf = vim.api.nvim_get_current_buf()
-  local control_win = vim.api.nvim_get_current_win()
+  local target_buf = vim.api.nvim_get_current_buf()
+  local target_win = vim.api.nvim_get_current_win()
   local ctx_obj = {
-    target_buf = control_buf,
-    target_win = control_win,
+    target_buf = target_buf,
+    target_win = target_win,
     config = cfg,
     view_state = {},
     mode = requested_mode,
@@ -201,7 +243,6 @@ local function open_book(path, mode)
   local tentative = {
     lifecycle = "ACTIVE",
     visibility = "VISIBLE",
-    controls = requested_mode == "statusline" and "INACTIVE" or "ACTIVE",
     mode = requested_mode,
     view_name = ctx_obj.view_name,
     book = book,
@@ -209,8 +250,8 @@ local function open_book(path, mode)
     position = { chapter_index = 1, line_index = 1, segment_index = 1 },
     ctx = ctx_obj,
     renderer = impl,
-    control_buf = control_buf,
-    control_win = control_win,
+    target_buf = target_buf,
+    target_win = target_win,
     generation = state.generation + 1,
   }
 
@@ -236,9 +277,7 @@ local function open_book(path, mode)
   set_state(tentative)
   setup_autocmds()
   history.record(book.path, cfg)
-  if active.controls == "ACTIVE" then
-    keymaps.enter_controls(active, cfg)
-  end
+  keymaps.attach(active, cfg, target_buf)
   active.visibility = "VISIBLE"
   return true
 end
@@ -278,11 +317,8 @@ function M.hide(policy)
     end
     return true
   end
-  if active.controls == "ACTIVE" then
-    keymaps.leave_controls(active)
-  end
+  keymaps.detach(active)
   active.visibility = "HARD_HIDDEN"
-  active.controls = "INACTIVE"
   active.hidden_policy = "hard"
   if active.renderer.hide then
     active.renderer.hide(active.ctx)
@@ -300,40 +336,26 @@ function M.toggle_hide()
   return M.restore()
 end
 
-function M.toggle_controls()
-  if not active then
-    return false
-  end
-  if active.controls == "ACTIVE" then
-    keymaps.leave_controls(active)
-    active.controls = "INACTIVE"
-  else
-    keymaps.enter_controls(active, active.config)
-    active.controls = "ACTIVE"
-  end
-  return true
-end
-
 function M.restore()
   if not active then
     return false
   end
   active.visibility = "VISIBLE"
-  if active.mode == "statusline" then
-    active.controls = "INACTIVE"
-  else
-    active.controls = "ACTIVE"
-  end
+  active.transitioning = true
+  local ok, restored
   if active.renderer.restore and active.hidden_policy ~= nil then
-    active.renderer.restore(active.ctx, frame_for(active.position))
+    ok, restored = pcall(active.renderer.restore, active.ctx, frame_for(active.position))
   else
-    render_current()
+    ok, restored = pcall(render_current)
+  end
+  active.transitioning = nil
+  if not ok or restored == false then
+    active.visibility = "HARD_HIDDEN"
+    return false
   end
   active.hidden_policy = nil
-  if active.mode ~= "statusline" then
-    active.controls = "ACTIVE"
-    keymaps.enter_controls(active, active.config)
-  end
+  local reader_buf = active.mode == "statusline" and vim.api.nvim_get_current_buf() or active.target_buf
+  keymaps.attach(active, active.config, reader_buf)
   return true
 end
 
@@ -341,26 +363,23 @@ function M.stop()
   if not active then
     state.lifecycle = "IDLE"
     state.visibility = "IDLE"
-    state.controls = "INACTIVE"
     return true
   end
   active.lifecycle = "STOPPING"
+  active.transitioning = true
   save_progress()
+  keymaps.detach(active)
+  if active.autocmd_group then
+    pcall(vim.api.nvim_del_augroup_by_id, active.autocmd_group)
+    active.autocmd_group = nil
+  end
   if active.renderer.stop then
     active.renderer.stop(active.ctx)
   end
-  if active.control_maps then
-    keymaps.leave_controls(active)
-  end
-  if active.autocmd_group then
-    pcall(vim.api.nvim_del_augroup_by_id, active.autocmd_group)
-  end
   state.lifecycle = "IDLE"
   state.visibility = "IDLE"
-  state.controls = "INACTIVE"
   active.lifecycle = "IDLE"
   active.visibility = "IDLE"
-  active.controls = "INACTIVE"
   set_state(nil)
   return true
 end
@@ -375,8 +394,6 @@ function M.dispatch(name)
     return M.hide("hard")
   elseif name == "toc" then
     return M.toc()
-  elseif name == "exit_controls" then
-    return M.toggle_controls()
   elseif name == "progress" then
     progress.show(active.book, active.position)
     return true
@@ -440,7 +457,6 @@ function M._reset_for_tests()
   state = {
     lifecycle = "IDLE",
     visibility = "IDLE",
-    controls = "INACTIVE",
     generation = 0,
   }
   default_config = require("ghost-reader.config").setup()

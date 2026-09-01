@@ -7,7 +7,7 @@ describe("session", function()
     helpers.reset_modules()
   end)
 
-  it("tracks lifecycle, visibility, and controls for an opened overlay session", function()
+  it("tracks lifecycle and visibility without a separate controls state", function()
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({
@@ -38,13 +38,14 @@ describe("session", function()
     assert.equal("ACTIVE", session.state.lifecycle)
     assert.equal("VISIBLE", session.state.visibility)
     assert.equal("overlay", session.state.mode)
+    assert.is_nil(session.state.controls)
 
     assert.is_true(session.hide("soft"))
     assert.equal("SOFT_HIDDEN", session.state.visibility)
-    assert.is_truthy(session.state.controls)
+    assert.is_nil(session.state.controls)
 
     assert.is_true(session.restore())
-    assert.equal("ACTIVE", session.state.controls)
+    assert.is_nil(session.state.controls)
 
     assert.is_true(session.stop())
     assert.is_nil(session.get())
@@ -214,6 +215,52 @@ describe("session", function()
     session.stop()
   end)
 
+  it("replaces repeated sessions by stopping only the previous renderer", function()
+    local created = {}
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function(_, mode)
+        local item = { mode = mode, stops = 0 }
+        created[#created + 1] = item
+        return {
+          render = function() return true end,
+          hide = function() return true end,
+          restore = function() return true end,
+          stop = function() item.stops = item.stops + 1; return true end,
+          page_size = function() return 1 end,
+          segment_count = function() return 1 end,
+          segment_text = function(_, text) return text end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+
+    assert.is_true(session.start("/tmp/first.txt", "overlay"))
+    local first = session.get()
+    assert.is_true(session.start("/tmp/second.txt", "statusline"))
+    assert.equal(first.generation + 1, session.get().generation)
+    assert.equal("statusline", session.get().mode)
+    assert.equal(1, created[1].stops)
+    assert.equal(0, created[2].stops)
+
+    session.stop()
+    assert.equal(1, created[1].stops)
+    assert.equal(1, created[2].stops)
+  end)
+
   it("records history only after a successful start", function()
     local history_calls = {}
     package.loaded["ghost-reader.history"] = {
@@ -275,7 +322,7 @@ describe("session", function()
     assert.equal(1, saves)
   end)
 
-  it("hard hide leaves controls before hiding and restore re-enters them for overlay", function()
+  it("detaches reader mappings on hard hide and reattaches them on restore", function()
     local events = {}
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)
@@ -288,8 +335,8 @@ describe("session", function()
       end,
     }
     package.loaded["ghost-reader.keymaps"] = {
-      enter_controls = function() events[#events + 1] = "enter" end,
-      leave_controls = function() events[#events + 1] = "leave" end,
+      attach = function() events[#events + 1] = "attach" end,
+      detach = function() events[#events + 1] = "detach" end,
     }
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
@@ -299,13 +346,11 @@ describe("session", function()
 
     session.configure(cfg)
     assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
-    assert.equal("ACTIVE", session.get().controls)
+    assert.is_nil(session.get().controls)
     assert.is_true(session.hide("hard"))
-    assert.equal("INACTIVE", session.get().controls)
-    assert.same({ "enter", "leave" }, events)
+    assert.same({ "attach", "detach" }, events)
     assert.is_true(session.restore())
-    assert.equal("ACTIVE", session.get().controls)
-    assert.same({ "enter", "leave", "leave", "enter" }, events)
+    assert.same({ "attach", "detach", "attach" }, events)
     session.stop()
   end)
 
@@ -394,6 +439,51 @@ describe("session", function()
     session.stop()
   end)
 
+  it("rerenders a visible statusline after layout-affecting events", function()
+    local renders = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a", "b" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        return {
+          render = function() renders = renders + 1; return true end,
+          hide = function() return true end,
+          restore = function() return true end,
+          stop = function() return true end,
+          page_size = function() return 1 end,
+          segment_count = function() return 1 end,
+          segment_text = function(_, text) return text end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "statusline"))
+    assert.equal(1, renders)
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    assert.is_truthy(vim.wait(100, function() return renders == 2 end, 5))
+    vim.api.nvim_exec_autocmds("OptionSet", { pattern = "laststatus" })
+    assert.is_truthy(vim.wait(100, function() return renders == 3 end, 5))
+
+    assert.is_true(session.hide("hard"))
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    vim.wait(20)
+    assert.equal(3, renders)
+    session.stop()
+  end)
+
   it("exposes the active renderer segment callbacks in frame rendering", function()
     local segment_calls = { count = 0, text = 0 }
     package.loaded["ghost-reader.bookshelf"] = {
@@ -439,9 +529,9 @@ describe("session", function()
     end
     local buf = helpers.new_normal_buffer({ "one" })
     vim.keymap.set("n", "j", "gj", { desc = "global user j" })
-    local session = { mode = "overlay", control_buf = buf, controls_active = false }
-    keymaps.enter_controls(session, config.setup())
-    keymaps.leave_controls(session)
+    local session = { mode = "overlay" }
+    keymaps.attach(session, config.setup(), buf)
+    keymaps.detach(session)
     local global_map = vim.fn.maparg("j", "n", false, true)
     assert.equal("gj", global_map.rhs)
     assert.equal("global user j", global_map.desc)

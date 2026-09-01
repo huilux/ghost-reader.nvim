@@ -24,13 +24,11 @@ local defaults = {
   keymaps = {
     global = {
       open = "<leader>rr",
-      statusline = "<leader>rs",
-      control = "<leader>rm",
       hide = "<Esc><Esc>",
       toc = "<leader>rt",
       close = "<leader>rq",
     },
-    controls = {
+    reader = {
       next_content = "j",
       prev_content = "k",
       next_page = "<C-f>",
@@ -42,7 +40,6 @@ local defaults = {
       hide = false,
       close = "q",
       help = "?",
-      exit_controls = false,
     },
     statusline = {
       toggle_auto = "a",
@@ -186,7 +183,7 @@ local function validate_schema(user_config)
     error("invalid config value at keymaps: expected table")
   end
   local keymaps = user_config.keymaps or {}
-  for _, section in ipairs({ "global", "controls", "statusline" }) do
+  for _, section in ipairs({ "global", "reader", "statusline" }) do
     if keymaps[section] ~= nil and type(keymaps[section]) ~= "table" then
       error("invalid config value at keymaps." .. section .. ": expected table")
     end

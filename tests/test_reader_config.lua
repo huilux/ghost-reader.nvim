@@ -26,12 +26,19 @@ describe("reader config threading", function()
     end
 
     local original_notify = vim.notify
+    local original_select = vim.ui.select
     vim.notify = function() end
+    vim.ui.select = function(items, opts, on_choice)
+      assert.equal("Select mode:", opts.prompt)
+      on_choice(items[1], 1)
+    end
 
     reader.open("tests/fixtures/sample.txt")
 
+    reader.close()
     bookshelf.open = original_open
     vim.notify = original_notify
+    vim.ui.select = original_select
 
     assert.are.same(cfg, captured_opts)
   end)
@@ -120,8 +127,13 @@ describe("reader config threading", function()
 
     local messages = {}
     local original_notify = vim.notify
+    local original_select = vim.ui.select
     vim.notify = function(msg)
       table.insert(messages, msg)
+    end
+    vim.ui.select = function(items, opts, on_choice)
+      assert.equal("Select mode:", opts.prompt)
+      on_choice(items[1], 1)
     end
 
     reader.open("tests/fixtures/sample.txt")
@@ -129,6 +141,7 @@ describe("reader config threading", function()
     reader.close()
     bookshelf.open = original_open
     vim.notify = original_notify
+    vim.ui.select = original_select
 
     for _, msg in ipairs(messages) do
       assert.is_nil(msg:match("sample%.txt"))

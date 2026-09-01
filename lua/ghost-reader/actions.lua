@@ -12,10 +12,6 @@ function M.statusline()
   return require("ghost-reader").open_statusline()
 end
 
-function M.control()
-  return require("ghost-reader").toggle_controls()
-end
-
 function M.hide()
   return require("ghost-reader").toggle_hide()
 end
@@ -36,7 +32,6 @@ function M.next_chapter() return dispatch("next_chapter") end
 function M.prev_chapter() return dispatch("prev_chapter") end
 function M.progress() return dispatch("progress") end
 function M.help() return dispatch("help") end
-function M.exit_controls() return dispatch("exit_controls") end
 function M.toggle_auto() return dispatch("toggle_auto") end
 function M.faster() return dispatch("faster") end
 function M.slower() return dispatch("slower") end

@@ -84,18 +84,41 @@ local function wrap_width()
   return math.max(20, vim.o.columns - 4)
 end
 
+local function ordinary_window_count()
+  local count = 0
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_config(win).relative == "" then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+local function has_native_statusline()
+  if vim.o.laststatus == 0 then
+    return false
+  end
+  if vim.o.laststatus == 1 then
+    return ordinary_window_count() > 1
+  end
+  return true
+end
+
+local function reader_row()
+  local statusline_rows = has_native_statusline() and 1 or 0
+  return math.max(0, vim.o.lines - vim.o.cmdheight - statusline_rows - 1)
+end
+
 local function update_window(st)
   if not (st.win and vim.api.nvim_win_is_valid(st.win)) then
     return false
   end
-  local height = 1
   local width = wrap_width()
-  local row = math.max(0, vim.o.lines - height - 1)
   vim.api.nvim_win_set_config(st.win, {
     relative = "editor",
     width = width,
-    height = height,
-    row = row,
+    height = 1,
+    row = reader_row(),
     col = 0,
     style = "minimal",
     focusable = false,
@@ -121,7 +144,7 @@ local function open_float(ctx)
     relative = "editor",
     width = wrap_width(),
     height = 1,
-    row = math.max(0, vim.o.lines - 2),
+    row = reader_row(),
     col = 0,
     style = "minimal",
     focusable = false,

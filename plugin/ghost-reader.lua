@@ -27,10 +27,6 @@ vim.api.nvim_create_user_command("GhostReaderClose", function()
   require("ghost-reader").close()
 end, {})
 
-vim.api.nvim_create_user_command("GhostReaderControl", function()
-  require("ghost-reader.actions").control()
-end, {})
-
 vim.api.nvim_create_user_command("GhostReaderHide", function()
   require("ghost-reader.actions").hide()
 end, {})

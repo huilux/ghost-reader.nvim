@@ -7,7 +7,7 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 3. Commands                                        |ghost-reader-commands|
 4. Overlay                                         |ghost-reader-overlay|
 5. Statusline                                      |ghost-reader-statusline|
-6. Controls                                        |ghost-reader-controls|
+6. Reading keys                                    |ghost-reader-keys|
 7. Stealth events                                  |ghost-reader-stealth|
 8. Configuration                                   |ghost-reader-config|
 9. Troubleshooting                                 |ghost-reader-troubleshooting|
@@ -19,7 +19,7 @@ ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
 with two user-facing modes:
 
   - overlay: the default real-buffer extmark reader
-  - statusline: a one-line floating reader at the bottom of the screen
+  - statusline: a one-line floating reader above the native statusline
 
 When overlay cannot attach cleanly, the plugin falls back to mirror
 automatically. That fallback keeps the session usable, but it is still only a
@@ -42,24 +42,22 @@ Requirements:
     },
     keys = {
       { "<leader>rr", function() require("ghost-reader").open() end, desc = "Open reading" },
-      { "<leader>rs", function() require("ghost-reader").open_statusline() end, desc = "Open statusline reader" },
     },
     opts = {},
   }
 <
 
-The `keys` table belongs to lazy.nvim. It provides only the two entry points
-that can load the plugin before a reading session exists. After loading,
-Ghost Reader registers the remaining global mappings and the buffer-local
-control mappings from its defaults, so those mappings do not need to be
-duplicated in both `keys` and `opts.keymaps`.
+The `keys` table belongs to lazy.nvim. It provides the single entry point that
+can load the plugin before a reading session exists. Every press selects a
+book and then selects overlay or statusline mode. After loading, Ghost Reader
+registers the remaining global and buffer-local reading mappings, so they do
+not need to be duplicated in both `keys` and `opts.keymaps`.
 
 ==============================================================================
 3. Commands                                        |ghost-reader-commands|
 
-:GhostReader [path]        Open an ebook or pick from history
+:GhostReader [path]        Pick an ebook if needed, then pick a reading mode
 :GhostReaderClose          Close the current session
-:GhostReaderControl        Toggle the reading control layer
 :GhostReaderHide            Hide or restore the current session
 :GhostReaderStatusline     Open in statusline mode
 :GhostReaderToc             Open the table of contents
@@ -78,7 +76,9 @@ overlay is the default mode.
 ==============================================================================
 5. Statusline                                      |ghost-reader-statusline|
 
-statusline mode uses a one-line floating window at the bottom of the screen.
+statusline mode uses a one-line floating window above the native Vim or
+lualine statusline. It follows changes to `laststatus`, `cmdheight`, editor
+size, and window layout without covering native status information.
 
   - `j` and `k` move by line or segment.
   - `a` toggles autoplay.
@@ -86,18 +86,16 @@ statusline mode uses a one-line floating window at the bottom of the screen.
   - Long text is wrapped by display width.
 
 ==============================================================================
-6. Controls                                        |ghost-reader-controls|
+6. Reading keys                                    |ghost-reader-keys|
 
 Global mappings:
 
-  <leader>rr    Open reading
-  <leader>rs    Open statusline reader
-  <leader>rm    Toggle reading controls
+  <leader>rr    Select a book and reading mode
   <Esc><Esc>    Hide or restore the current session
   <leader>rt    Open the table of contents
   <leader>rq    Close the current session
 
-Control layer mappings:
+Visible-reading mappings:
 
   j             Next content
   k             Previous content
@@ -120,26 +118,25 @@ The stealth layer can hide the session automatically on:
   - Window leave
   - Focus lost
 
-`<Esc><Esc>` toggles between visible and hard-hidden states. Hiding exits the
-control layer and restores captured mappings. Restoring overlay or mirror
-re-enters controls; restoring statusline leaves controls inactive. A single
-`<Esc>` keeps its native Neovim behavior, and `<leader>rm` alone toggles the
-control layer.
+`<Esc><Esc>` toggles between visible and hard-hidden states. Hard hiding
+restores captured mappings; restoring immediately installs the reading keys
+again. A single `<Esc>` keeps its native Neovim behavior. Keys not configured
+as reading keys also keep their native behavior.
 
-If `keymaps.controls.exit_controls` is explicitly set back to `<Esc>`, that
-buffer-local prefix takes precedence over the global `<Esc><Esc>` mapping.
-Configure hide to a sequence without the `<Esc>` prefix in that case.
+While statusline reading stays visible, mappings move from the old buffer to
+the current buffer when windows or buffers change. The float and autoplay keep
+running. Overlay still soft-hides during Insert mode; hard hide events restore
+the captured Normal-mode mappings.
 
 ==============================================================================
 8. Configuration                                   |ghost-reader-config|
 
 Every option below is optional. `keymaps.global` controls global mappings
-after the plugin loads. `keymaps.controls` and `keymaps.statusline` control
-buffer-local mappings inside a reading session. When changing `global.open`
-or `global.statusline`, update the matching lazy.nvim `keys` entry as well so
-the first key press can load the plugin. With lazy.nvim, place the contents of
-the `setup({ ... })` table under `opts`; call `setup()` directly only for a
-manual configuration.
+after the plugin loads. `keymaps.reader` and `keymaps.statusline` control
+buffer-local mappings while reading is visible. When changing `global.open`,
+update the matching lazy.nvim `keys` entry as well so the first key press can
+load the plugin. With lazy.nvim, place the contents of the `setup({ ... })`
+table under `opts`; call `setup()` directly only for a manual configuration.
 
 >lua
   require("ghost-reader").setup({
@@ -169,13 +166,11 @@ manual configuration.
     keymaps = {
       global = {
         open = "<leader>rr",
-        statusline = "<leader>rs",
-        control = "<leader>rm",
         hide = "<Esc><Esc>",
         toc = "<leader>rt",
         close = "<leader>rq",
       },
-      controls = {
+      reader = {
         next_content = "j",
         prev_content = "k",
         next_page = "<C-f>",
@@ -187,7 +182,6 @@ manual configuration.
         hide = false,
         close = "q",
         help = "?",
-        exit_controls = false,
       },
       statusline = {
         toggle_auto = "a",

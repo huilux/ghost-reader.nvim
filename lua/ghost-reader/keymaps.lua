@@ -8,7 +8,6 @@ local installed_global_maps = {}
 local plug_defs = {
   Open = actions.open,
   Statusline = actions.statusline,
-  Control = actions.control,
   Hide = actions.hide,
   Toc = actions.toc,
   Close = actions.close,
@@ -20,7 +19,6 @@ local plug_defs = {
   PrevChapter = actions.prev_chapter,
   Progress = actions.progress,
   Help = actions.help,
-  ExitControls = actions.exit_controls,
   ToggleAuto = actions.toggle_auto,
   Faster = actions.faster,
   Slower = actions.slower,
@@ -98,8 +96,6 @@ function M.setup(config)
   local global = config.keymaps and config.keymaps.global or {}
   local plug_map = {
     open = "Open",
-    statusline = "Statusline",
-    control = "Control",
     hide = "Hide",
     toc = "Toc",
     close = "Close",
@@ -114,25 +110,35 @@ function M.setup(config)
   end
 end
 
-function M.enter_controls(session, config)
-  local controls = (config.keymaps and config.keymaps.controls) or {}
+function M.attach(session, config, buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return false
+  end
+  if session.reader_buf == buf and session.reader_maps and next(session.reader_maps) ~= nil then
+    return true
+  end
+  if session.reader_maps then
+    M.detach(session)
+  end
+
+  local reader = (config.keymaps and config.keymaps.reader) or {}
   local statusline = (config.keymaps and config.keymaps.statusline) or {}
-  local buf = session.control_buf
-  session.control_maps = session.control_maps or {}
+  session.reader_buf = buf
+  session.reader_maps = {}
 
   local mappings = {
-    { key = controls.next_content, plug = "NextContent", desc = "next content" },
-    { key = controls.prev_content, plug = "PrevContent", desc = "prev content" },
-    { key = controls.next_page, plug = "NextPage", desc = "next page" },
-    { key = controls.prev_page, plug = "PrevPage", desc = "prev page" },
-    { key = controls.next_chapter, plug = "NextChapter", desc = "next chapter" },
-    { key = controls.prev_chapter, plug = "PrevChapter", desc = "prev chapter" },
-    { key = controls.toc, plug = "Toc", desc = "table of contents" },
-    { key = controls.progress, plug = "Progress", desc = "progress" },
-    { key = controls.hide, plug = "Hide", desc = "hide" },
-    { key = controls.close, plug = "Close", desc = "close" },
-    { key = controls.help, plug = "Help", desc = "help" },
-    { key = controls.exit_controls, plug = "ExitControls", desc = "exit controls" },
+    { key = reader.next_content, plug = "NextContent", desc = "next content" },
+    { key = reader.prev_content, plug = "PrevContent", desc = "prev content" },
+    { key = reader.next_page, plug = "NextPage", desc = "next page" },
+    { key = reader.prev_page, plug = "PrevPage", desc = "prev page" },
+    { key = reader.next_chapter, plug = "NextChapter", desc = "next chapter" },
+    { key = reader.prev_chapter, plug = "PrevChapter", desc = "prev chapter" },
+    { key = reader.toc, plug = "Toc", desc = "table of contents" },
+    { key = reader.progress, plug = "Progress", desc = "progress" },
+    { key = reader.hide, plug = "Hide", desc = "hide" },
+    { key = reader.close, plug = "Close", desc = "close" },
+    { key = reader.help, plug = "Help", desc = "help" },
   }
   if session.mode == "statusline" then
     mappings[#mappings + 1] = { key = statusline.toggle_auto, plug = "ToggleAuto", desc = "toggle auto" }
@@ -143,7 +149,7 @@ function M.enter_controls(session, config)
   for _, item in ipairs(mappings) do
     if item.key then
       local previous = capture_map(buf, item.key)
-      session.control_maps[resolve(item.key)] = { buf = buf, lhs = item.key, previous = previous }
+      session.reader_maps[resolve(item.key)] = { buf = buf, lhs = item.key, previous = previous }
       vim.api.nvim_buf_call(buf, function()
         vim.keymap.set("n", resolve(item.key), "<Plug>(GhostReader" .. item.plug .. ")", {
           buffer = buf,
@@ -155,20 +161,20 @@ function M.enter_controls(session, config)
     end
   end
 
-  session.controls_active = true
+  return true
 end
 
-function M.leave_controls(session)
-  if not session or not session.control_maps then
+function M.detach(session)
+  if not session or not session.reader_maps then
     return
   end
-  for _, capture in pairs(session.control_maps) do
-    if capture and capture.buf and capture.lhs then
+  for _, capture in pairs(session.reader_maps) do
+    if capture and capture.buf and capture.lhs and vim.api.nvim_buf_is_valid(capture.buf) then
       restore_capture(capture.buf, capture.lhs, capture.previous)
     end
   end
-  session.control_maps = {}
-  session.controls_active = false
+  session.reader_maps = nil
+  session.reader_buf = nil
 end
 
 return M

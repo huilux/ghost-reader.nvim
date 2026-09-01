@@ -40,7 +40,7 @@ local nested = {
   keymaps = {
     global = {
       open = "<leader>rr",
-      statusline = "<leader>rs",
+      hide = "<Esc><Esc>",
     },
   },
 }

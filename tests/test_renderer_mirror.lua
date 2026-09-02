@@ -128,6 +128,7 @@ describe("renderer.mirror", function()
 
   it("keeps slot rows stable, moves to the active anchor, and restores the view", function()
     local ctx = make_context(100)
+    vim.api.nvim_win_set_cursor(ctx.target_win, { 18, 7 })
     local before_lines = vim.api.nvim_buf_get_lines(ctx.target_buf, 0, -1, false)
     local before_name = vim.api.nvim_buf_get_name(ctx.target_buf)
     local before_filetype = vim.bo[ctx.target_buf].filetype
@@ -142,6 +143,7 @@ describe("renderer.mirror", function()
     assert.is_true(mirror.render(ctx, frame(1, blocks)))
     local rows = vim.deepcopy(ctx.view_state.mirror.reader_rows)
     assert.equal(rows[1], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
+    assert.equal(0, vim.api.nvim_win_get_cursor(ctx.target_win)[2])
 
     assert.is_true(mirror.render(ctx, frame(2, {
       block(1, { "one" }),
@@ -150,6 +152,7 @@ describe("renderer.mirror", function()
     })))
     assert.same(rows, ctx.view_state.mirror.reader_rows)
     assert.equal(rows[2], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
+    assert.equal(0, vim.api.nvim_win_get_cursor(ctx.target_win)[2])
     assert.same(before_lines, vim.api.nvim_buf_get_lines(ctx.target_buf, 0, -1, false))
     assert.equal(before_name, vim.api.nvim_buf_get_name(ctx.target_buf))
     assert.equal(before_filetype, vim.bo[ctx.target_buf].filetype)
@@ -159,6 +162,31 @@ describe("renderer.mirror", function()
     assert.is_true(mirror.hide(ctx))
     assert.same(saved_view, vim.api.nvim_win_call(ctx.target_win, vim.fn.winsaveview))
     assert.is_false(ctx.view_state.mirror.visible)
+  end)
+
+  it("does not prepare virtual text for unused rows in a short block", function()
+    local ctx = make_context(100)
+    assert.is_true(mirror.render(ctx, frame(1, { block(1, { "only one line" }, true) })))
+    local state = ctx.view_state.mirror
+    assert.is_truthy(state.prepared_by_row[state.reader_rows[1]])
+    assert.is_nil(state.prepared_by_row[state.reader_rows[1] + 1])
+  end)
+
+  it("reflows slots after fold invalidation and avoids folded anchors", function()
+    local ctx = make_context(100)
+    ctx.config.buffer.layout.region_lines = 10
+    ctx.config.buffer.layout.max_blocks_per_region = 1
+    ctx.config.buffer.layout.max_total_blocks = 10
+    assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    vim.api.nvim_buf_call(ctx.target_buf, function()
+      vim.wo[ctx.target_win].foldmethod = "manual"
+      vim.cmd("1,3fold")
+    end)
+    mirror.invalidate_layout(ctx)
+    assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    for _, row in ipairs(ctx.view_state.mirror.reader_rows) do
+      assert.is_false(vim.api.nvim_win_call(ctx.target_win, function() return vim.fn.foldclosed(row) ~= -1 end))
+    end
   end)
 
   it("retains cached blocks across hide and clears them on stop", function()

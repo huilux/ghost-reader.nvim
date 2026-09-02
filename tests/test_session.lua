@@ -440,6 +440,41 @@ describe("session", function()
     session.stop()
   end)
 
+  it("hard-hides and detaches when a scheduled reflow render fails", function()
+    local renders = 0
+    local hides = 0
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return { path = path, format = "txt", chapters = { { title = "One", lines = { "one" } } } }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        return {
+          render = function()
+            renders = renders + 1
+            return renders == 1
+          end,
+          hide = function() hides = hides + 1; return true end,
+          stop = function() return true end,
+          page_size = function() return 1 end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({ "local value = true" }, "lua")
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    vim.api.nvim_exec_autocmds("VimResized", {})
+    assert.is_truthy(vim.wait(100, function() return session.get().visibility == "HARD_HIDDEN" end, 5))
+    assert.is_true(hides > 0)
+    assert.is_true(renders >= 2)
+    session.stop()
+  end)
+
   it("renders a previous-content boundary as a backward batch ending at the requested position", function()
     local frames = {}
     package.loaded["ghost-reader.bookshelf"] = {

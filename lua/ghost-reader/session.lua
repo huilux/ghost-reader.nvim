@@ -212,8 +212,20 @@ local function setup_autocmds()
       if is_current_session() and active.visibility == "VISIBLE" then
         if active.mode == "mirror" then
           active.position = navigate.normalize(active.book, active.position, segment_count)
+          if active.renderer.invalidate_layout then
+            pcall(active.renderer.invalidate_layout, active.ctx)
+          end
         end
-        render_current()
+        local ok, rendered = pcall(render_current)
+        if not ok or rendered == false then
+          if active.renderer.hide then
+            pcall(active.renderer.hide, active.ctx)
+          end
+          keymaps.detach(active)
+          active.visibility = "HARD_HIDDEN"
+          active.hidden_policy = "hard"
+          active.insert_suspended = false
+        end
       end
     end)
   end
@@ -274,6 +286,18 @@ local function setup_autocmds()
     group = active.autocmd_group,
     callback = schedule_reflow,
   })
+
+  if vim.fn.exists("##FoldClosed") == 1 and vim.fn.exists("##FoldOpened") == 1 then
+    vim.api.nvim_create_autocmd({ "FoldClosed", "FoldOpened" }, {
+      group = active.autocmd_group,
+      callback = function()
+        if is_current_session() and active.mode == "mirror" and active.renderer.invalidate_layout then
+          pcall(active.renderer.invalidate_layout, active.ctx)
+        end
+        schedule_reflow()
+      end,
+    })
+  end
 
   vim.api.nvim_create_autocmd("OptionSet", {
     group = active.autocmd_group,

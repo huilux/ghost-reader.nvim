@@ -134,7 +134,7 @@ local function prepare_rows(ctx, blocks, slots)
     reader_rows[index] = slot.row
     if key then rendered_by_key[key] = slot.row end
     local content = type(block.text) == "table" and block.text or { block.text or "" }
-    for offset = 0, slot.height - 1 do
+    for offset = 0, math.min(slot.height, #content) - 1 do
       local row = slot.row + offset
       prepared_by_row[row] = {
         virt_text = {{ padded_comment(ctx, row, content[offset + 1] or ""), "GhostReaderMirror" }},
@@ -172,7 +172,7 @@ local function activate(ctx, mirror, row)
   end
   mirror.active_row = row
   local cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
-  vim.api.nvim_win_set_cursor(ctx.target_win, { row, cursor[2] })
+  vim.api.nvim_win_set_cursor(ctx.target_win, { row, 0 })
   return true
 end
 
@@ -247,6 +247,13 @@ function M.render(ctx, frame)
     anchor = active_key and mirror.rendered_by_key[active_key] or mirror.reader_rows[1]
   end
 
+  if anchor and is_folded(ctx, anchor) then
+    M.invalidate_layout(ctx)
+    slots = ensure_slots(ctx)
+    prepare_rows(ctx, (frame and frame.blocks) or {}, slots)
+    anchor = active_key and mirror.rendered_by_key[active_key] or mirror.reader_rows[1]
+  end
+
   mirror.target_win = ctx.target_win
   mirror.target_buf = ctx.target_buf
   mirror.priority = priority
@@ -272,6 +279,11 @@ end
 
 function M.restore(ctx, frame)
   return M.render(ctx, frame)
+end
+
+function M.invalidate_layout(ctx)
+  local mirror = state(ctx)
+  mirror.layout_signature = nil
 end
 
 function M.stop(ctx)

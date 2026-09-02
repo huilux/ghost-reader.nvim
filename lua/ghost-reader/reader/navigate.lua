@@ -194,4 +194,20 @@ function M.peek(book, position, count, segment_count)
   return items
 end
 
+function M.peek_backward(book, position, count, segment_count)
+  local items = {}
+  local pos = copy(M.normalize(book, position, segment_count))
+  local limit = math.max(1, tonumber(count) or 1)
+  items[1] = copy(pos)
+  for _ = 2, limit do
+    local previous, moved = M.prev_content(book, pos, segment_count)
+    if not moved then
+      break
+    end
+    pos = previous
+    table.insert(items, 1, copy(pos))
+  end
+  return items
+end
+
 return M

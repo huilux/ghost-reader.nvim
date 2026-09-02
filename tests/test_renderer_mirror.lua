@@ -4,297 +4,173 @@ helpers.reset_modules()
 local mirror = require("ghost-reader.renderer.mirror")
 local buffer_seq = 0
 
-local function reader_rows(ctx)
-  return ctx.view_state.mirror.reader_rows or {}
-end
+local layout = {
+  region_lines = 50,
+  max_blocks_per_region = 3,
+  max_lines_per_block = 2,
+  min_gap_lines = 6,
+  max_total_blocks = 12,
+  edge_padding = 2,
+}
 
-local function make_context()
+local function make_context(line_count)
   vim.o.swapfile = false
   buffer_seq = buffer_seq + 1
-
-  local buf = vim.api.nvim_create_buf(false, false)
-  vim.api.nvim_buf_set_name(buf, "mirror-test-" .. buffer_seq .. ".lua")
+  local target_buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(target_buf, "mirror-test-" .. buffer_seq .. ".lua")
   local lines = {}
-  for i = 1, 40 do
-    lines[i] = "local line_" .. i .. " = " .. i
-  end
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].filetype = "lua"
-  vim.bo[buf].modified = false
-
-  local win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(win, buf)
-  vim.api.nvim_win_set_height(win, 12)
-  vim.api.nvim_win_set_width(win, 80)
-  vim.api.nvim_win_set_cursor(win, { 18, 0 })
-
-  return {
-    target_buf = buf,
-    target_win = win,
-    config = {
-      buffer = {
-        style = "light",
-        light = { visible_lines = 3, max_consecutive_lines = 3 },
-        strong = { visible_lines = 3, max_consecutive_lines = 1 },
-      },
-    },
-    view_state = {},
-    mode = "mirror",
-    view_name = "mirror",
-  }
-end
-
-local function make_two_window_context()
-  vim.o.swapfile = false
-  buffer_seq = buffer_seq + 1
-
-  local target_buf = vim.api.nvim_create_buf(false, false)
-  vim.api.nvim_buf_set_name(target_buf, "mirror-target-" .. buffer_seq .. ".lua")
-  local lines = {}
-  for i = 1, 40 do
-    lines[i] = "local target_" .. i .. " = " .. i
+  for i = 1, line_count or 100 do
+    lines[i] = i == 1 and "  local line_" .. i .. " = " .. i or "local line_" .. i .. " = " .. i
   end
   vim.api.nvim_buf_set_lines(target_buf, 0, -1, false, lines)
   vim.bo[target_buf].filetype = "lua"
   vim.bo[target_buf].modified = false
 
-  local scratch_buf = vim.api.nvim_create_buf(false, false)
-  vim.api.nvim_buf_set_name(scratch_buf, "mirror-peer-" .. buffer_seq .. ".lua")
-  vim.api.nvim_buf_set_lines(scratch_buf, 0, -1, false, { "peer buffer" })
-  vim.bo[scratch_buf].filetype = "lua"
-  vim.bo[scratch_buf].modified = false
-
-  local current_win = vim.api.nvim_get_current_win()
-  local peer_win = vim.api.nvim_open_win(scratch_buf, false, {
-    relative = "editor",
-    width = 40,
-    height = 10,
-    row = 1,
-    col = 1,
-    style = "minimal",
-    border = "none",
-  })
-
-  vim.api.nvim_win_set_buf(current_win, target_buf)
-  vim.api.nvim_win_set_height(current_win, 12)
-  vim.api.nvim_win_set_width(current_win, 80)
-  vim.api.nvim_win_set_cursor(current_win, { 24, 0 })
-
-  vim.api.nvim_win_set_cursor(peer_win, { 1, 0 })
-  vim.api.nvim_win_set_width(peer_win, 40)
+  local target_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(target_win, target_buf)
+  vim.api.nvim_win_set_height(target_win, 12)
+  vim.api.nvim_win_set_width(target_win, 80)
+  vim.api.nvim_win_set_cursor(target_win, { math.min(18, #lines), 0 })
 
   return {
     target_buf = target_buf,
-    target_win = current_win,
-    peer_win = peer_win,
-    config = {
-      buffer = {
-        style = "light",
-        light = { visible_lines = 3, max_consecutive_lines = 3 },
-        strong = { visible_lines = 3, max_consecutive_lines = 1 },
-      },
-    },
+    target_win = target_win,
+    config = { buffer = { layout = vim.deepcopy(layout), virt_text_priority = 1000 } },
     view_state = {},
     mode = "mirror",
     view_name = "mirror",
   }
 end
 
+local function block(line, text, active)
+  return {
+    chapter_index = 1,
+    line_index = line,
+    segment_index = 1,
+    text = text,
+    active = active,
+  }
+end
+
+local function frame(position_line, blocks)
+  return {
+    position = { chapter_index = 1, line_index = position_line, segment_index = 1 },
+    blocks = blocks,
+  }
+end
+
 describe("renderer.mirror", function()
-  it("renders virtual text on the real target buffer", function()
-    local ctx = make_context()
-    local target = ctx.target_buf
-    local before = vim.api.nvim_buf_get_lines(target, 0, -1, false)
-    local name = vim.api.nvim_buf_get_name(target)
+  it("wraps a paragraph into block-sized segments", function()
+    local ctx = make_context(100)
+    ctx.config.buffer.layout.max_lines_per_block = 2
+    vim.api.nvim_win_set_width(ctx.target_win, 24)
 
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, {
-      blocks = {
-        { chapter_index = 1, line_index = 1, segment_index = 1, text = "first", active = true },
-        { chapter_index = 1, line_index = 2, segment_index = 1, text = "second", active = false },
-      },
-    }))
-
-    local state = ctx.view_state.mirror
-    assert.is_nil(state.buf)
-    assert.is_number(state.namespace)
-    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
-    assert.same(before, vim.api.nvim_buf_get_lines(target, 0, -1, false))
-    assert.equal(name, vim.api.nvim_buf_get_name(target))
-    assert.is_false(vim.bo[target].modified)
-
-    local marks = vim.api.nvim_buf_get_extmarks(target, state.namespace, 0, -1, { details = true })
-    assert.is_truthy(#marks > 0)
-    assert.equal("overlay", marks[1][4].virt_text_pos)
+    local count = mirror.segment_count(ctx, string.rep("word ", 30))
+    assert.is_true(count > 1)
+    local content = mirror.segment_text(ctx, string.rep("word ", 30), 1)
+    assert.is_table(content)
+    assert.is_true(#content >= 1 and #content <= 2)
   end)
 
-  it("keeps one namespace while rerendering the real buffer", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    local namespace = ctx.view_state.mirror.namespace
-    local target = ctx.target_buf
-
-    assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
-    assert.is_true(mirror.render(ctx, { blocks = { { text = "page two", active = true } } }))
-    assert.equal(namespace, ctx.view_state.mirror.namespace)
-    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(target, namespace, 0, -1, {}) > 0)
+  it("uses distributed slot count as page size", function()
+    assert.equal(12, mirror.page_size(make_context(500)))
   end)
 
-  it("renders comment-prefixed wide text across the available display width", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, {
-      blocks = { { text = "中文阅读", active = true } },
-    }))
+  it("draws prepared ephemeral virtual text only in its target window", function()
+    local ctx = make_context(100)
+    local peer_win = vim.api.nvim_open_win(ctx.target_buf, false, {
+      relative = "editor",
+      width = 40,
+      height = 10,
+      row = 1,
+      col = 1,
+      style = "minimal",
+    })
+    local captured_provider
+    local marks = {}
+    local original_provider = vim.api.nvim_set_decoration_provider
+    local original_extmark = vim.api.nvim_buf_set_extmark
+    vim.api.nvim_set_decoration_provider = function(namespace, provider)
+      captured_provider = { namespace = namespace, callback = provider.on_win }
+    end
+    vim.api.nvim_buf_set_extmark = function(_, namespace, row, _, opts)
+      if namespace == captured_provider.namespace and opts and opts.ephemeral then
+        marks[#marks + 1] = { row = row, opts = opts }
+      end
+      return #marks
+    end
 
-    local marks = vim.api.nvim_buf_get_extmarks(ctx.target_buf, ctx.view_state.mirror.namespace, 0, -1, { details = true })
-    local chunk = marks[1][4].virt_text[1]
-    assert.is_truthy(chunk[1]:match("^%-%- 中文阅读"))
-    assert.equal("GhostReaderMirrorActive", chunk[2])
-    assert.equal(vim.api.nvim_win_get_width(ctx.target_win), vim.fn.strwidth(chunk[1]))
+    local ok, err = xpcall(function()
+      assert.is_true(mirror.start(ctx))
+      assert.is_true(mirror.render(ctx, frame(1, { block(1, { "first", "line" }, true) })))
+      captured_provider.callback(captured_provider.namespace, ctx.target_win, ctx.target_buf, 0, 100)
+      assert.is_true(#marks > 0)
+      local mark = marks[1]
+      assert.equal("overlay", mark.opts.virt_text_pos)
+      assert.is_true(mark.opts.virt_text_hide)
+      assert.equal("replace", mark.opts.hl_mode)
+      assert.equal(1000, mark.opts.priority)
+      assert.is_true(mark.opts.ephemeral)
+      assert.equal("GhostReaderMirror", mark.opts.virt_text[1][2])
+
+      marks = {}
+      captured_provider.callback(captured_provider.namespace, peer_win, ctx.target_buf, 0, 100)
+      assert.equal(0, #marks)
+    end, debug.traceback)
+    vim.api.nvim_set_decoration_provider = original_provider
+    vim.api.nvim_buf_set_extmark = original_extmark
+    if captured_provider then
+      vim.api.nvim_set_decoration_provider(captured_provider.namespace, { on_win = captured_provider.callback })
+    end
+    vim.api.nvim_win_close(peer_win, true)
+    if not ok then error(err) end
   end)
 
-  it("renders light style as a contiguous reading group", function()
-    local ctx = make_context()
-    ctx.config.buffer.light.max_consecutive_lines = 2
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, {
-      blocks = {
-        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
-        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
-        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
-      },
-    }))
-    local rows = reader_rows(ctx)
-    assert.equal(3, #rows)
-    assert.equal(1, rows[2] - rows[1])
-    assert.is_true(rows[3] - rows[2] > 1)
-  end)
+  it("keeps slot rows stable, moves to the active anchor, and restores the view", function()
+    local ctx = make_context(100)
+    local before_lines = vim.api.nvim_buf_get_lines(ctx.target_buf, 0, -1, false)
+    local before_name = vim.api.nvim_buf_get_name(ctx.target_buf)
+    local before_filetype = vim.bo[ctx.target_buf].filetype
+    local saved_view = vim.api.nvim_win_call(ctx.target_win, vim.fn.winsaveview)
+    local saved_buf = vim.api.nvim_win_get_buf(ctx.target_win)
+    local blocks = {
+      block(1, { "one" }, true),
+      block(2, { "two" }),
+      block(3, { "three" }),
+    }
 
-  it("renders strong style as separated reading groups", function()
-    local ctx = make_context()
-    ctx.config.buffer.style = "strong"
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, {
-      blocks = {
-        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
-        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
-        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
-      },
-    }))
-    local rows = reader_rows(ctx)
-    assert.equal(3, #rows)
-    assert.is_true(rows[2] - rows[1] > 1)
-    assert.is_true(rows[3] - rows[2] > 1)
-    local marks = vim.api.nvim_buf_get_extmarks(ctx.target_buf, ctx.view_state.mirror.namespace, 0, -1, { details = true })
-    local virtual_text = marks[1][4].virt_text[1][1]
-    assert.is_truthy(virtual_text:match("one"))
-  end)
-
-  it("moves the cursor between rendered reading rows without stopping on code rows", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, {
-      blocks = {
-        { chapter_index = 1, line_index = 1, segment_index = 1, text = "one" },
-        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
-        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
-      },
-    }))
-    local rows = reader_rows(ctx)
+    assert.is_true(mirror.render(ctx, frame(1, blocks)))
+    local rows = vim.deepcopy(ctx.view_state.mirror.reader_rows)
     assert.equal(rows[1], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
-    assert.is_true(mirror.render(ctx, {
-      blocks = {
-        { chapter_index = 1, line_index = 2, segment_index = 1, text = "two" },
-        { chapter_index = 1, line_index = 3, segment_index = 1, text = "three" },
-        { chapter_index = 1, line_index = 4, segment_index = 1, text = "four" },
-      },
-    }))
+
+    assert.is_true(mirror.render(ctx, frame(2, {
+      block(1, { "one" }),
+      block(2, { "two" }, true),
+      block(3, { "three" }),
+    })))
+    assert.same(rows, ctx.view_state.mirror.reader_rows)
     assert.equal(rows[2], vim.api.nvim_win_get_cursor(ctx.target_win)[1])
-  end)
-
-  it("uses the configured visible line count as its page size", function()
-    local ctx = make_context()
-    ctx.config.buffer.light.visible_lines = 7
-    assert.equal(7, mirror.page_size(ctx))
-  end)
-
-  it("hide restores the real buffer and view", function()
-    local ctx = make_context()
-    local real_buf = ctx.target_buf
-    local real_win = ctx.target_win
-
-    local real_cursor = vim.api.nvim_win_get_cursor(real_win)
-    local real_topline = vim.fn.winsaveview().topline
-    local real_leftcol = vim.fn.winsaveview().leftcol
-
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
+    assert.same(before_lines, vim.api.nvim_buf_get_lines(ctx.target_buf, 0, -1, false))
+    assert.equal(before_name, vim.api.nvim_buf_get_name(ctx.target_buf))
+    assert.equal(before_filetype, vim.bo[ctx.target_buf].filetype)
+    assert.is_false(vim.bo[ctx.target_buf].modified)
+    assert.equal(saved_buf, vim.api.nvim_win_get_buf(ctx.target_win))
 
     assert.is_true(mirror.hide(ctx))
-    assert.equal(real_buf, vim.api.nvim_win_get_buf(real_win))
-    assert.same(real_cursor, vim.api.nvim_win_get_cursor(real_win))
-    local restored_view = vim.fn.winsaveview()
-    assert.equal(real_topline, restored_view.topline)
-    assert.equal(real_leftcol, restored_view.leftcol)
+    assert.same(saved_view, vim.api.nvim_win_call(ctx.target_win, vim.fn.winsaveview))
+    assert.is_false(ctx.view_state.mirror.visible)
   end)
 
-  it("restore reuses the real target buffer", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    local target = ctx.target_buf
-
+  it("retains cached blocks across hide and clears them on stop", function()
+    local ctx = make_context(100)
+    assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    local rows = vim.deepcopy(ctx.view_state.mirror.reader_rows)
     assert.is_true(mirror.hide(ctx))
-    assert.is_true(mirror.restore(ctx, { blocks = { { text = "page one", active = true } } }))
-    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(target, ctx.view_state.mirror.namespace, 0, -1, {}) > 0)
-  end)
-
-  it("stop clears virtual text without deleting the target buffer", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    local target = ctx.target_buf
-    local namespace = ctx.view_state.mirror.namespace
-    assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
-
+    assert.same(rows, ctx.view_state.mirror.reader_rows)
+    assert.is_true(mirror.restore(ctx, frame(1, { block(1, { "one" }, true) })))
     assert.is_true(mirror.stop(ctx))
-    assert.is_true(vim.api.nvim_buf_is_valid(target))
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(target, namespace, 0, -1, {}))
-  end)
-
-  it("hide and stop are idempotent", function()
-    local ctx = make_context()
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.hide(ctx))
-    assert.is_true(mirror.hide(ctx))
-    assert.is_true(mirror.stop(ctx))
-    assert.is_true(mirror.stop(ctx))
-  end)
-
-  it("restores a non-current target window view", function()
-    local ctx = make_two_window_context()
-    vim.api.nvim_set_current_win(ctx.peer_win)
-
-    local expected_cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
-    local expected_view = vim.api.nvim_win_call(ctx.target_win, function()
-      return vim.fn.winsaveview()
-    end)
-
-    assert.is_true(mirror.start(ctx))
-    assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
-    assert.is_true(mirror.hide(ctx))
-
-    local restored_cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
-    local restored_view = vim.api.nvim_win_call(ctx.target_win, function()
-      return vim.fn.winsaveview()
-    end)
-
-    assert.same(expected_cursor, restored_cursor)
-    assert.equal(expected_view.topline, restored_view.topline)
-    assert.equal(expected_view.leftcol, restored_view.leftcol)
-    assert.equal(expected_view.col, restored_view.col)
-    assert.equal(expected_view.lnum, restored_view.lnum)
-    assert.equal(expected_view.curswant, restored_view.curswant)
+    assert.is_nil(ctx.view_state.mirror.prepared_by_row)
+    assert.is_nil(ctx.view_state.mirror.rendered_by_key)
+    assert.is_nil(ctx.view_state.mirror.reader_rows)
   end)
 end)

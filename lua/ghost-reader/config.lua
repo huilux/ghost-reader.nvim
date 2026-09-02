@@ -8,12 +8,21 @@ local defaults = {
     style = "light",
     light = {
       visible_lines = 6,
-      max_consecutive_lines = 6,
+      max_consecutive_lines = 2,
     },
     strong = {
       visible_lines = 3,
       max_consecutive_lines = 1,
     },
+    layout = {
+      region_lines = 50,
+      max_blocks_per_region = 3,
+      max_lines_per_block = 2,
+      min_gap_lines = 6,
+      max_total_blocks = 12,
+      edge_padding = 2,
+    },
+    virt_text_priority = 1000,
   },
   statusline = {
     interval = 3000,
@@ -57,6 +66,10 @@ local function is_positive_integer(value)
   return type(value) == "number" and value > 0 and value % 1 == 0
 end
 
+local function is_non_negative_integer(value)
+  return type(value) == "number" and value >= 0 and value % 1 == 0
+end
+
 local function validate_value(value, expected, path)
   if expected == "string" then
     if type(value) ~= "string" then
@@ -75,6 +88,13 @@ local function validate_value(value, expected, path)
   if expected == "positive_integer" then
     if not is_positive_integer(value) then
       error("invalid config value at " .. path .. ": expected positive integer")
+    end
+    return
+  end
+
+  if expected == "non_negative_integer" then
+    if not is_non_negative_integer(value) then
+      error("invalid config value at " .. path .. ": expected non-negative integer")
     end
     return
   end
@@ -159,6 +179,26 @@ local function validate_schema(user_config)
     end
   end
 
+  if buffer.layout ~= nil and type(buffer.layout) ~= "table" then
+    error("invalid config value at buffer.layout: expected table")
+  end
+  local layout = buffer.layout or {}
+  for _, field in ipairs({ "region_lines", "max_blocks_per_region", "max_lines_per_block", "min_gap_lines", "max_total_blocks" }) do
+    if layout[field] ~= nil then
+      validate_value(layout[field], "positive_integer", "buffer.layout." .. field)
+    end
+  end
+  if layout.edge_padding ~= nil then
+    validate_value(layout.edge_padding, "non_negative_integer", "buffer.layout.edge_padding")
+  end
+  if layout.region_lines ~= nil and layout.max_lines_per_block ~= nil and layout.edge_padding ~= nil
+    and layout.max_lines_per_block + (layout.edge_padding * 2) > layout.region_lines then
+    error("invalid config value at buffer.layout.max_lines_per_block: does not fit region_lines after edge_padding")
+  end
+  if buffer.virt_text_priority ~= nil then
+    validate_value(buffer.virt_text_priority, "positive_integer", "buffer.virt_text_priority")
+  end
+
   if user_config.statusline ~= nil and type(user_config.statusline) ~= "table" then
     error("invalid config value at statusline: expected table")
   end
@@ -225,9 +265,35 @@ local function deep_merge(base, override)
   return result
 end
 
+local function normalize_user_config(user_config)
+  local normalized = vim.deepcopy(user_config or {})
+  local buffer = normalized.buffer
+  if type(buffer) ~= "table" then
+    return normalized
+  end
+
+  buffer.preset = nil
+  if buffer.layout == nil and (buffer.style ~= nil or buffer.light ~= nil or buffer.strong ~= nil) then
+    local style = buffer.style or defaults.buffer.style
+    local legacy = vim.tbl_deep_extend(
+      "force",
+      vim.deepcopy(defaults.buffer[style] or defaults.buffer.light),
+      type(buffer[style]) == "table" and buffer[style] or {}
+    )
+    buffer.layout = vim.deepcopy(defaults.buffer.layout)
+    buffer.layout.max_lines_per_block = legacy.max_consecutive_lines
+    buffer.layout.max_blocks_per_region = math.max(
+      1,
+      math.ceil(legacy.visible_lines / legacy.max_consecutive_lines)
+    )
+  end
+  return normalized
+end
+
 function M.setup(user_config)
-  validate_schema(user_config)
-  local cfg = deep_merge(defaults, user_config)
+  local normalized = normalize_user_config(user_config)
+  validate_schema(normalized)
+  local cfg = deep_merge(defaults, normalized)
   cfg.paths.cache_dir = cfg.paths.cache_dir or (vim.fn.stdpath("cache") .. "/ghost-reader/")
   cfg.paths.data_dir = cfg.paths.data_dir or (vim.fn.stdpath("data") .. "/ghost-reader/")
   return cfg

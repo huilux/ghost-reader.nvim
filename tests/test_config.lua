@@ -6,7 +6,15 @@ describe("config", function()
     assert.equal("mirror", cfg.reader.renderer)
     assert.is_nil(cfg.reader.visible_blocks)
     assert.is_nil(cfg.reader.mirror_fallback)
-    assert.is_nil(cfg.buffer.preset)
+    assert.same({
+      region_lines = 50,
+      max_blocks_per_region = 3,
+      max_lines_per_block = 2,
+      min_gap_lines = 6,
+      max_total_blocks = 12,
+      edge_padding = 2,
+    }, cfg.buffer.layout)
+    assert.equal(1000, cfg.buffer.virt_text_priority)
     assert.is_nil(cfg.stealth.overlay)
     assert.equal("j", cfg.keymaps.reader.next_content)
     assert.equal("<Esc><Esc>", cfg.keymaps.global.hide)
@@ -22,7 +30,7 @@ describe("config", function()
     local cfg = config.setup()
     assert.equal("light", cfg.buffer.style)
     assert.equal(6, cfg.buffer.light.visible_lines)
-    assert.equal(6, cfg.buffer.light.max_consecutive_lines)
+    assert.equal(2, cfg.buffer.light.max_consecutive_lines)
     assert.equal(3, cfg.buffer.strong.visible_lines)
     assert.equal(1, cfg.buffer.strong.max_consecutive_lines)
 
@@ -49,8 +57,10 @@ describe("config", function()
       "unknown config key: reader.visible_blocks")
     assert.has_error(function() config.setup({ reader = { mirror_fallback = true } }) end,
       "unknown config key: reader.mirror_fallback")
-    assert.has_error(function() config.setup({ buffer = { preset = "random" } }) end,
-      "unknown config key: buffer.preset")
+    assert.is_nil(config.setup({ buffer = { preset = "random" } }).buffer.preset)
+    assert.equal(50, config.setup({ buffer = { preset = "random" } }).buffer.layout.region_lines)
+    assert.has_error(function() config.setup({ buffer = { mystery = true } }) end,
+      "unknown config key: buffer.mystery")
     assert.has_error(function() config.setup({ stealth = { overlay = {} } }) end,
       "unknown config key: stealth.overlay")
   end)
@@ -80,6 +90,29 @@ describe("config", function()
     assert.has_error(function()
       config.setup({ buffer = { strong = { visible_lines = 2, max_consecutive_lines = 3 } } })
     end)
+  end)
+
+  it("validates distributed mirror layout", function()
+    assert.has_error(function()
+      config.setup({ buffer = { layout = { region_lines = 0 } } })
+    end, "invalid config value at buffer.layout.region_lines: expected positive integer")
+    assert.has_error(function()
+      config.setup({ buffer = { layout = { edge_padding = -1 } } })
+    end, "invalid config value at buffer.layout.edge_padding: expected non-negative integer")
+    assert.has_error(function()
+      config.setup({ buffer = { layout = { region_lines = 4, max_lines_per_block = 2, edge_padding = 2 } } })
+    end, "invalid config value at buffer.layout.max_lines_per_block: does not fit region_lines after edge_padding")
+  end)
+
+  it("normalizes explicit legacy style density when layout is absent", function()
+    local cfg = config.setup({
+      buffer = {
+        style = "light",
+        light = { visible_lines = 6, max_consecutive_lines = 2 },
+      },
+    })
+    assert.equal(3, cfg.buffer.layout.max_blocks_per_region)
+    assert.equal(2, cfg.buffer.layout.max_lines_per_block)
   end)
 
   it("rejects malformed section values", function()

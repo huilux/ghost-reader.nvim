@@ -175,7 +175,7 @@ describe("renderer.mirror", function()
   it("reflows slots after fold invalidation and avoids folded anchors", function()
     local ctx = make_context(100)
     ctx.config.buffer.layout.region_lines = 10
-    ctx.config.buffer.layout.max_blocks_per_region = 1
+    ctx.config.buffer.layout.max_blocks_per_region = 2
     ctx.config.buffer.layout.max_total_blocks = 10
     ctx.config.buffer.layout.edge_padding = 0
     assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
@@ -198,7 +198,7 @@ describe("renderer.mirror", function()
   it("bounds distinct folded slot history while retaining current slots", function()
     local ctx = make_context(100)
     ctx.config.buffer.layout.region_lines = 10
-    ctx.config.buffer.layout.max_blocks_per_region = 1
+    ctx.config.buffer.layout.max_blocks_per_region = 2
     ctx.config.buffer.layout.max_total_blocks = 2
     ctx.config.buffer.layout.max_lines_per_block = 1
     ctx.config.buffer.layout.edge_padding = 0
@@ -206,9 +206,11 @@ describe("renderer.mirror", function()
     vim.wo[ctx.target_win].foldmethod = "manual"
     local folded_history = {}
     local folded_order = {}
-    for _ = 1, 8 do
+    for _ = 1, 28 do
       local candidate
-      for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
+      local slots = ctx.view_state.mirror.slots or {}
+      for index = #slots, 1, -1 do
+        local slot = slots[index]
         if not folded_history[slot.row]
           and vim.fn.foldclosed(slot.row) == -1
           and slot.row < vim.api.nvim_buf_line_count(ctx.target_buf) then
@@ -222,8 +224,13 @@ describe("renderer.mirror", function()
       vim.cmd(("%d,%dfold"):format(candidate, candidate + 1))
       mirror.invalidate_layout(ctx)
       assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+      if #folded_order > ctx.config.buffer.layout.max_total_blocks
+        and not ctx.view_state.mirror.observed_fold_rows[candidate] then
+        break
+      end
     end
     assert.is_true(vim.tbl_count(folded_history) > ctx.config.buffer.layout.max_total_blocks)
+    local latest_folded = folded_order[#folded_order]
     local current_slots = {}
     for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
       current_slots[slot.row] = true
@@ -238,15 +245,8 @@ describe("renderer.mirror", function()
       end
     end
     assert.is_true(historical_count <= ctx.config.buffer.layout.max_total_blocks)
-    local latest_folded
-    for index = #folded_order, 1, -1 do
-      if not current_slots[folded_order[index]]
-        and not ctx.view_state.mirror.observed_fold_rows[folded_order[index]] then
-        latest_folded = folded_order[index]
-        break
-      end
-    end
-    assert.is_not_nil(latest_folded)
+    assert.is_nil(current_slots[latest_folded])
+    assert.is_nil(ctx.view_state.mirror.observed_fold_rows[latest_folded])
     assert.is_true(vim.fn.foldclosed(latest_folded) ~= -1)
   end)
 

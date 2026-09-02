@@ -183,10 +183,13 @@ local function validate_schema(user_config)
     error("invalid config value at buffer.layout: expected table")
   end
   local layout = buffer.layout or {}
-  for _, field in ipairs({ "region_lines", "max_blocks_per_region", "max_lines_per_block", "min_gap_lines", "max_total_blocks" }) do
+  for _, field in ipairs({ "region_lines", "max_blocks_per_region", "max_lines_per_block", "max_total_blocks" }) do
     if layout[field] ~= nil then
       validate_value(layout[field], "positive_integer", "buffer.layout." .. field)
     end
+  end
+  if layout.min_gap_lines ~= nil then
+    validate_value(layout.min_gap_lines, "non_negative_integer", "buffer.layout.min_gap_lines")
   end
   if layout.edge_padding ~= nil then
     validate_value(layout.edge_padding, "non_negative_integer", "buffer.layout.edge_padding")

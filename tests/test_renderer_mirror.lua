@@ -128,16 +128,31 @@ describe("renderer.mirror", function()
     assert.equal("overlay", marks[1][4].virt_text_pos)
   end)
 
-  it("keeps one skeleton and an unnamed scratch buffer", function()
+  it("keeps one namespace while rerendering the real buffer", function()
     local ctx = make_context()
     assert.is_true(mirror.start(ctx))
-    local mirror_buf = ctx.view_state.mirror.buf
-    local skeleton = vim.deepcopy(ctx.view_state.mirror.skeleton)
-    assert.equal("", vim.api.nvim_buf_get_name(mirror_buf))
+    local namespace = ctx.view_state.mirror.namespace
+    local target = ctx.target_buf
 
     assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
     assert.is_true(mirror.render(ctx, { blocks = { { text = "page two", active = true } } }))
-    assert.same(skeleton, ctx.view_state.mirror.skeleton)
+    assert.equal(namespace, ctx.view_state.mirror.namespace)
+    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
+    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(target, namespace, 0, -1, {}) > 0)
+  end)
+
+  it("renders comment-prefixed wide text across the available display width", function()
+    local ctx = make_context()
+    assert.is_true(mirror.start(ctx))
+    assert.is_true(mirror.render(ctx, {
+      blocks = { { text = "中文阅读", active = true } },
+    }))
+
+    local marks = vim.api.nvim_buf_get_extmarks(ctx.target_buf, ctx.view_state.mirror.namespace, 0, -1, { details = true })
+    local chunk = marks[1][4].virt_text[1]
+    assert.is_truthy(chunk[1]:match("^%-%- 中文阅读"))
+    assert.equal("GhostReaderMirrorActive", chunk[2])
+    assert.equal(vim.api.nvim_win_get_width(ctx.target_win), vim.fn.strwidth(chunk[1]))
   end)
 
   it("renders light style as a contiguous reading group", function()
@@ -172,8 +187,9 @@ describe("renderer.mirror", function()
     assert.equal(3, #rows)
     assert.is_true(rows[2] - rows[1] > 1)
     assert.is_true(rows[3] - rows[2] > 1)
-    local lines = vim.api.nvim_buf_get_lines(ctx.view_state.mirror.buf, 0, -1, false)
-    assert.is_truthy(lines[rows[1]]:match("one"))
+    local marks = vim.api.nvim_buf_get_extmarks(ctx.target_buf, ctx.view_state.mirror.namespace, 0, -1, { details = true })
+    local virtual_text = marks[1][4].virt_text[1][1]
+    assert.is_truthy(virtual_text:match("one"))
   end)
 
   it("moves the cursor between rendered reading rows without stopping on skeleton code", function()
@@ -224,23 +240,27 @@ describe("renderer.mirror", function()
     assert.equal(real_leftcol, restored_view.leftcol)
   end)
 
-  it("restore reuses the mirror buffer", function()
+  it("restore reuses the real target buffer", function()
     local ctx = make_context()
     assert.is_true(mirror.start(ctx))
-    local first_buf = ctx.view_state.mirror.buf
+    local target = ctx.target_buf
 
     assert.is_true(mirror.hide(ctx))
     assert.is_true(mirror.restore(ctx, { blocks = { { text = "page one", active = true } } }))
-    assert.equal(first_buf, ctx.view_state.mirror.buf)
+    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
+    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(target, ctx.view_state.mirror.namespace, 0, -1, {}) > 0)
   end)
 
-  it("stop deletes the scratch buffer", function()
+  it("stop clears virtual text without deleting the target buffer", function()
     local ctx = make_context()
     assert.is_true(mirror.start(ctx))
-    local mirror_buf = ctx.view_state.mirror.buf
+    local target = ctx.target_buf
+    local namespace = ctx.view_state.mirror.namespace
+    assert.is_true(mirror.render(ctx, { blocks = { { text = "page one", active = true } } }))
 
     assert.is_true(mirror.stop(ctx))
-    assert.is_false(vim.api.nvim_buf_is_valid(mirror_buf))
+    assert.is_true(vim.api.nvim_buf_is_valid(target))
+    assert.equal(0, #vim.api.nvim_buf_get_extmarks(target, namespace, 0, -1, {}))
   end)
 
   it("hide and stop are idempotent", function()

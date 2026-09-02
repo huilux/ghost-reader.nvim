@@ -192,7 +192,7 @@ describe("renderer.mirror", function()
     assert.is_truthy(virtual_text:match("one"))
   end)
 
-  it("moves the cursor between rendered reading rows without stopping on skeleton code", function()
+  it("moves the cursor between rendered reading rows without stopping on code rows", function()
     local ctx = make_context()
     assert.is_true(mirror.start(ctx))
     assert.is_true(mirror.render(ctx, {

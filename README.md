@@ -4,7 +4,7 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 
 这个插件有两个可选阅读模式：
 
-- mirror 是默认的 buffer 阅读模式，使用匿名 scratch buffer 伪装成代码文件。
+- mirror 是默认的 buffer 阅读模式，使用虚拟文本覆盖在当前文件 buffer 上。
 - statusline 是原生状态栏上方的一行浮窗，一次显示一段文本。
 
 视觉上的伪装只是界面层面的效果，不是安全边界。
@@ -85,16 +85,17 @@ statusline：
 mirror：
 
 - 默认的 buffer 阅读模式。
-- 使用匿名 scratch buffer 作为稳定替身，原代码 buffer 不会被改写。
-- 书籍内容以当前语言的注释形式显示，支持 `light` 和 `strong` 两种伪装样式。
-- `j/k` 会把光标跳到下一条/上一条阅读行，强伪装会自动跳过代码骨架。
+- 书籍内容以当前语言的注释形式显示在当前活动文件上，顶部 Tab 和文件名保持不变。
+- 使用虚拟文本，不会改写原代码、modified 状态、undo、LSP 或诊断信息。
+- `light` 和 `strong` 控制阅读内容在当前可见代码行中的分布方式。
+- `j/k` 会把光标跳到下一条/上一条阅读行；切换 buffer 或窗口时阅读标记和快捷键会跟随当前文件。
 - `visible_lines` 控制一屏阅读行数，`max_consecutive_lines` 控制连续阅读行的上限。
 
 ## Stealth 事件
 
 当 `stealth.hide_on_focus_lost` 开启时，编辑器失去焦点会自动硬隐藏当前会话。
 
-`<Esc><Esc>` 会在显示与硬隐藏之间切换。硬隐藏会恢复被接管的原始映射；恢复后阅读映射立即重新生效。单击 `<Esc>` 保留 Neovim 的原生行为。statusline 可见时切换 buffer 或窗口，旧 buffer 会恢复原映射，新 buffer 会接管阅读键，浮窗和自动翻页保持运行。
+`<Esc><Esc>` 会在显示与硬隐藏之间切换。硬隐藏会恢复被接管的原始映射；恢复后阅读映射立即重新生效。单击 `<Esc>` 保留 Neovim 的原生行为。mirror 或 statusline 可见时切换 buffer 或窗口，阅读标记/浮窗和快捷键会跟随当前文件；进入 terminal、help 等特殊 buffer 时 mirror 会暂时硬隐藏。
 
 ## 配置
 
@@ -107,7 +108,6 @@ require("ghost-reader").setup({
   },
   buffer = {
     style = "light", -- "light" 或 "strong"
-    preset = "random",
     light = {
       visible_lines = 6,
       max_consecutive_lines = 6,

@@ -6,7 +6,6 @@ local defaults = {
   },
   buffer = {
     style = "light",
-    preset = "random",
     light = {
       visible_lines = 6,
       max_consecutive_lines = 6,
@@ -142,9 +141,6 @@ local function validate_schema(user_config)
   local buffer = user_config.buffer or {}
   if buffer.style ~= nil then
     validate_value(buffer.style, "buffer_style", "buffer.style")
-  end
-  if buffer.preset ~= nil then
-    validate_value(buffer.preset, "string", "buffer.preset")
   end
   for _, style in ipairs({ "light", "strong" }) do
     if buffer[style] ~= nil and type(buffer[style]) ~= "table" then

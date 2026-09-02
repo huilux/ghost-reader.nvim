@@ -6,6 +6,7 @@ describe("config", function()
     assert.equal("mirror", cfg.reader.renderer)
     assert.is_nil(cfg.reader.visible_blocks)
     assert.is_nil(cfg.reader.mirror_fallback)
+    assert.is_nil(cfg.buffer.preset)
     assert.is_nil(cfg.stealth.overlay)
     assert.equal("j", cfg.keymaps.reader.next_content)
     assert.equal("<Esc><Esc>", cfg.keymaps.global.hide)
@@ -48,6 +49,8 @@ describe("config", function()
       "unknown config key: reader.visible_blocks")
     assert.has_error(function() config.setup({ reader = { mirror_fallback = true } }) end,
       "unknown config key: reader.mirror_fallback")
+    assert.has_error(function() config.setup({ buffer = { preset = "random" } }) end,
+      "unknown config key: buffer.preset")
     assert.has_error(function() config.setup({ stealth = { overlay = {} } }) end,
       "unknown config key: stealth.overlay")
   end)

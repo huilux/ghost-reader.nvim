@@ -18,7 +18,7 @@ ghost-reader.nvim - Read ebooks covertly in Neovim
 ghost-reader.nvim lets you read ebooks (EPUB, TXT, Markdown) inside Neovim
 with two user-facing modes:
 
-  - mirror: the default code-like scratch-buffer reader
+  - mirror: the default code-like real-buffer virtual-text reader
   - statusline: a one-line floating reader above the native statusline
 
 Both modes are visual concealment only, not a security boundary.
@@ -63,17 +63,21 @@ not need to be duplicated in both `keys` and `opts.keymaps`.
 ==============================================================================
 4. Mirror                                          |ghost-reader-mirror|
 
-mirror mode uses an anonymous scratch buffer as a visual code disguise. The
-source buffer is saved and restored without changing its text or undo history.
-The renderer writes book lines as valid comments and keeps a stable code
-skeleton for the duration of the session.
+mirror mode uses virtual text over the current normal file buffer as a visual
+code disguise. Buffer tabs, names, text, modified state, undo history,
+diagnostics, and LSP input remain unchanged. The renderer writes book segments
+as valid comments and follows buffer or window changes while reading remains
+visible.
 
 Two styles are available through `buffer.style`:
 
   - light: reading lines are grouped together for easier reading
-  - strong: reading lines are distributed through the code skeleton
+  - strong: reading lines are distributed through the visible code lines
 
-`j` and `k` move the cursor between reading lines and skip skeleton code.
+`j` and `k` move the cursor between reading lines and skip non-reading code
+rows. Entering terminal, help, prompt, quickfix, or another special buffer
+temporarily hard-hides mirror; restore it after returning to a normal file
+buffer.
 `buffer.<style>.visible_lines` controls the number of book lines loaded in one
 view. `buffer.<style>.max_consecutive_lines` limits the number of adjacent book
 lines in each group. The defaults are light `6/6` and strong `3/1`.
@@ -145,7 +149,6 @@ table under `opts`; call `setup()` directly only for a manual configuration.
     },
     buffer = {
       style = "light",
-      preset = "random",
       light = {
         visible_lines = 6,
         max_consecutive_lines = 6,

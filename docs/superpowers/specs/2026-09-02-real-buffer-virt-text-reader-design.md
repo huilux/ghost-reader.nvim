@@ -181,4 +181,3 @@ Configuration, public API, renderer registry, README, and help-file tests will b
 - Remove `lua/ghost-reader/renderer/presets.lua` after confirming it has no consumer.
 - Update mirror, session integration, config, renderer, and public API tests as required.
 - Update `README.md`, `docs/ghost-reader.txt`, and relevant concept documentation.
-

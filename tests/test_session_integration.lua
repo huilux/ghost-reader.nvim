@@ -292,6 +292,7 @@ describe("session integration", function()
     for _, row in ipairs(current.ctx.view_state.mirror.reader_rows) do
       assert.equal(-1, vim.api.nvim_win_call(current.target_win, function() return vim.fn.foldclosed(row) end))
     end
+    local folded_rows = vim.deepcopy(current.ctx.view_state.mirror.reader_rows)
 
     local ok, err = pcall(vim.api.nvim_win_call, current.target_win, function()
       vim.cmd(('%d,%dfoldopen'):format(fold_start, fold_end))
@@ -303,7 +304,11 @@ describe("session integration", function()
       current.renderer.invalidate_layout(current.ctx)
       vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
     end
-    assert.is_truthy(vim.wait(100, function() return current.visibility == "VISIBLE" end, 5))
+    assert.is_truthy(vim.wait(100, function()
+      return current.visibility == "VISIBLE"
+        and not vim.deep_equal(current.ctx.view_state.mirror.reader_rows, folded_rows)
+        and next(current.ctx.view_state.mirror.prepared_by_row or {}) ~= nil
+    end, 5))
     assert.is_true(current.ctx.view_state.mirror.active_row ~= nil)
     session.stop()
   end)

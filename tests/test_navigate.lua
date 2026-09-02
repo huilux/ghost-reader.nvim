@@ -93,4 +93,29 @@ describe("navigate", function()
     assert.same({ chapter_index = 1, line_index = 2, segment_index = 1 }, peeked[3])
     assert.same({ chapter_index = 1, line_index = 1, segment_index = 1 }, pos)
   end)
+
+  it("peeks backward in reading order without mutating the position", function()
+    local pos = { chapter_index = 2, line_index = 1, segment_index = 1 }
+    local peeked = navigate.peek_backward(book, pos, 3, segments)
+
+    assert.same({
+      { chapter_index = 1, line_index = 1, segment_index = 2 },
+      { chapter_index = 1, line_index = 2, segment_index = 1 },
+      { chapter_index = 2, line_index = 1, segment_index = 1 },
+    }, peeked)
+    assert.same({ chapter_index = 2, line_index = 1, segment_index = 1 }, pos)
+  end)
+
+  it("stops backward peeking at the first unit in reading order", function()
+    local pos = { chapter_index = 2, line_index = 1, segment_index = 1 }
+    local peeked = navigate.peek_backward(book, pos, 99, segments)
+
+    assert.same({
+      { chapter_index = 1, line_index = 1, segment_index = 1 },
+      { chapter_index = 1, line_index = 1, segment_index = 2 },
+      { chapter_index = 1, line_index = 2, segment_index = 1 },
+      { chapter_index = 2, line_index = 1, segment_index = 1 },
+    }, peeked)
+    assert.same({ chapter_index = 2, line_index = 1, segment_index = 1 }, pos)
+  end)
 end)

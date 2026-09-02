@@ -234,6 +234,80 @@ describe("session integration", function()
     session.stop()
   end)
 
+  it("reflows a real mirror session when its active anchor is folded", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "one", "two", "three", "four", "five", "six" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    local cfg = require("ghost-reader.config").setup({
+      buffer = {
+        layout = {
+          region_lines = 20,
+          max_blocks_per_region = 1,
+          max_lines_per_block = 1,
+          min_gap_lines = 1,
+          max_total_blocks = 4,
+          edge_padding = 0,
+        },
+      },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    })
+    local lines = {}
+    for index = 1, 80 do lines[index] = "local value_" .. index .. " = " .. index end
+    local file = helpers.new_normal_buffer(lines, "lua")
+    session.configure(cfg)
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    local current = session.get()
+    local old_active = current.ctx.view_state.mirror.active_row
+    assert.is_number(old_active)
+
+    local fold_start = old_active
+    local fold_end = math.min(vim.api.nvim_buf_line_count(file), old_active + 1)
+    vim.api.nvim_win_call(current.target_win, function()
+      vim.wo[current.target_win].foldmethod = "manual"
+      vim.cmd(('%d,%dfold'):format(fold_start, fold_end))
+    end)
+    local has_fold_events = vim.fn.exists("##FoldClosed") == 1 and vim.fn.exists("##FoldOpened") == 1
+    if has_fold_events then
+      local registered = vim.api.nvim_get_autocmds({ group = current.autocmd_group, event = "FoldClosed" })
+      assert.is_true(#registered > 0)
+      vim.api.nvim_exec_autocmds("FoldClosed", { buffer = file })
+    else
+      current.renderer.invalidate_layout(current.ctx)
+      vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
+    end
+    assert.is_truthy(vim.wait(100, function()
+      local active_row = current.ctx.view_state.mirror.active_row
+      return active_row ~= old_active and active_row ~= nil
+        and vim.api.nvim_win_call(current.target_win, function() return vim.fn.foldclosed(active_row) == -1 end)
+    end, 5))
+    for _, row in ipairs(current.ctx.view_state.mirror.reader_rows) do
+      assert.equal(-1, vim.api.nvim_win_call(current.target_win, function() return vim.fn.foldclosed(row) end))
+    end
+
+    local ok, err = pcall(vim.api.nvim_win_call, current.target_win, function()
+      vim.cmd(('%d,%dfoldopen'):format(fold_start, fold_end))
+    end)
+    assert.is_true(ok, err)
+    if has_fold_events then
+      vim.api.nvim_exec_autocmds("FoldOpened", { buffer = file })
+    else
+      current.renderer.invalidate_layout(current.ctx)
+      vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
+    end
+    assert.is_truthy(vim.wait(100, function() return current.visibility == "VISIBLE" end, 5))
+    assert.is_true(current.ctx.view_state.mirror.active_row ~= nil)
+    session.stop()
+  end)
+
   it("follows the active file when mirror reading switches buffers", function()
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)

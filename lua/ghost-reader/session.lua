@@ -49,35 +49,42 @@ local function segment_count(chapter_index, line_index)
   return math.max(1, tonumber(active.renderer.segment_count(active.ctx, text)) or 1)
 end
 
-local function frame_for(pos)
-  local chapter = active.book.chapters[pos.chapter_index] or { lines = {} }
-  local lines = chapter.lines or {}
+local function same_position(left, right)
+  return left.chapter_index == right.chapter_index
+    and left.line_index == right.line_index
+    and (left.segment_index or 1) == (right.segment_index or 1)
+end
+
+local function frame_for(pos, direction)
   local page_size = active.renderer.page_size(active.ctx)
-  local peek = navigate.peek(active.book, pos, math.max(1, page_size), segment_count)
+  local normalized = navigate.normalize(active.book, pos, segment_count)
+  local items
+  if direction == "backward" then
+    items = navigate.peek_backward(active.book, normalized, page_size, segment_count)
+  else
+    items = navigate.peek(active.book, normalized, page_size, segment_count)
+  end
   local blocks = {}
-  for i, item in ipairs(peek) do
+  for i, item in ipairs(items) do
     local chapter_item = active.book.chapters[item.chapter_index] or { lines = {} }
     local line = chapter_item.lines[item.line_index] or ""
-    local segment_text = line
+    local text = line
     if active.renderer.segment_text then
-      segment_text = active.renderer.segment_text(active.ctx, line, item.segment_index) or line
+      text = active.renderer.segment_text(active.ctx, line, item.segment_index) or line
     end
     blocks[#blocks + 1] = {
       index = i,
       chapter_index = item.chapter_index,
       line_index = item.line_index,
       segment_index = item.segment_index,
-      text = segment_text,
-      active = i == 1,
+      text = text,
+      active = same_position(item, normalized),
     }
-  end
-  if #blocks == 0 then
-    blocks[1] = { index = 1, chapter_index = pos.chapter_index, line_index = pos.line_index, segment_index = pos.segment_index, text = lines[pos.line_index] or "", active = true }
   end
   return {
     title = active.book.title or active.book.path or "",
     path = active.book.path,
-    position = clone(pos),
+    position = clone(normalized),
     blocks = blocks,
     page_size = page_size,
   }
@@ -100,11 +107,12 @@ local function reader_buffer(session)
   return session.target_buf
 end
 
-local function render_current()
+local function render_current(direction)
   if not active then
     return false
   end
-  local frame = frame_for(active.position)
+  active.position = navigate.normalize(active.book, active.position, segment_count)
+  local frame = frame_for(active.position, direction)
   local ok = active.renderer.render(make_renderer_ctx(), frame)
   return ok ~= false
 end
@@ -138,11 +146,16 @@ local function adopt_target(render)
 
   local next_buf = vim.api.nvim_get_current_buf()
   local next_win = vim.api.nvim_get_current_win()
-  if not mirror_target_supported(next_buf, next_win) then
-    keymaps.detach(active)
+  local renderer_hidden = false
+  local function hide_renderer()
     if active.renderer.hide then
       pcall(active.renderer.hide, active.ctx)
+      renderer_hidden = true
     end
+  end
+  if not mirror_target_supported(next_buf, next_win) then
+    hide_renderer()
+    keymaps.detach(active)
     active.visibility = "HARD_HIDDEN"
     active.hidden_policy = "hard"
     active.insert_suspended = false
@@ -151,10 +164,8 @@ local function adopt_target(render)
 
   local changed = active.target_buf ~= next_buf or active.target_win ~= next_win
   if changed then
+    hide_renderer()
     keymaps.detach(active)
-    if active.renderer.hide then
-      pcall(active.renderer.hide, active.ctx)
-    end
     active.target_buf = next_buf
     active.target_win = next_win
     active.ctx.target_buf = next_buf
@@ -164,6 +175,9 @@ local function adopt_target(render)
   if render and active.visibility == "VISIBLE" then
     local ok, rendered = pcall(render_current)
     if not ok or rendered == false then
+      if not renderer_hidden then
+        hide_renderer()
+      end
       keymaps.detach(active)
       active.visibility = "HARD_HIDDEN"
       active.hidden_policy = "hard"
@@ -188,14 +202,17 @@ local function setup_autocmds()
   end
 
   local reflow_pending = false
-  local function schedule_statusline_reflow()
+  local function schedule_reflow()
     if reflow_pending then
       return
     end
     reflow_pending = true
     vim.schedule(function()
       reflow_pending = false
-      if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
+      if is_current_session() and active.visibility == "VISIBLE" then
+        if active.mode == "mirror" then
+          active.position = navigate.normalize(active.book, active.position, segment_count)
+        end
         render_current()
       end
     end)
@@ -215,19 +232,6 @@ local function setup_autocmds()
     callback = function()
       if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
         keymaps.attach(active, active.config, vim.api.nvim_get_current_buf())
-      end
-    end,
-  })
-
-  vim.api.nvim_create_autocmd("BufLeave", {
-    group = active.autocmd_group,
-    callback = function(args)
-      if is_current_session() and active.mode == "mirror" and active.visibility == "VISIBLE"
-        and args.buf == active.target_buf then
-        keymaps.detach(active)
-        if active.renderer.hide then
-          active.renderer.hide(active.ctx)
-        end
       end
     end,
   })
@@ -268,13 +272,13 @@ local function setup_autocmds()
 
   vim.api.nvim_create_autocmd({ "VimResized", "WinResized", "WinNew", "WinClosed" }, {
     group = active.autocmd_group,
-    callback = schedule_statusline_reflow,
+    callback = schedule_reflow,
   })
 
   vim.api.nvim_create_autocmd("OptionSet", {
     group = active.autocmd_group,
     pattern = { "cmdheight", "laststatus" },
-    callback = schedule_statusline_reflow,
+    callback = schedule_reflow,
   })
 
   vim.api.nvim_create_autocmd("FocusLost", {
@@ -518,7 +522,7 @@ function M.dispatch(name)
     return false
   end
   active.position = next_pos
-  render_current()
+  render_current(name == "prev_content" and "backward" or nil)
   return moved
 end
 

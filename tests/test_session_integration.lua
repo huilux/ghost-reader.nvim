@@ -80,6 +80,160 @@ describe("session integration", function()
     assert.is_true(vim.api.nvim_buf_is_valid(target))
   end)
 
+  it("reuses forward batches and builds previous batches from the active block", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = {
+            { title = "One", lines = { "one", "two", "three", "four", "five", "six", "seven", "eight" } },
+          },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      buffer = {
+        layout = {
+          region_lines = 4,
+          max_blocks_per_region = 1,
+          max_lines_per_block = 1,
+          min_gap_lines = 1,
+          max_total_blocks = 3,
+          edge_padding = 0,
+        },
+      },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({ "local a = 1", "local b = 2", "local c = 3", "local d = 4", "local e = 5", "local f = 6", "local g = 7", "local h = 8", "local i = 9", "local j = 10", "local k = 11", "local l = 12" }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    local initial_rows = vim.deepcopy(session.get().ctx.view_state.mirror.reader_rows)
+    session.dispatch("next_content")
+    assert.same(initial_rows, session.get().ctx.view_state.mirror.reader_rows)
+    assert.equal(initial_rows[2], vim.api.nvim_win_get_cursor(0)[1])
+
+    session.dispatch("next_content")
+    session.dispatch("next_content")
+    assert.same(initial_rows, session.get().ctx.view_state.mirror.reader_rows)
+    assert.equal(4, session.get().position.line_index)
+    assert.equal(initial_rows[1], vim.api.nvim_win_get_cursor(0)[1])
+
+    session.dispatch("prev_content")
+    assert.equal(3, session.get().position.line_index)
+    assert.equal(initial_rows[#initial_rows], vim.api.nvim_win_get_cursor(0)[1])
+    session.stop()
+  end)
+
+  it("restores each code view after hiding and migrating the mirror", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "one", "two", "three", "four", "five", "six" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    local first = helpers.new_normal_buffer({ "local first_1 = 1", "local first_2 = 2", "local first_3 = 3", "local first_4 = 4", "local first_5 = 5", "local first_6 = 6" }, "lua")
+    local extra_first_lines = {}
+    for index = 7, 80 do extra_first_lines[#extra_first_lines + 1] = "local first_" .. index .. " = " .. index end
+    vim.api.nvim_buf_set_lines(first, -1, -1, false, extra_first_lines)
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+    vim.fn.winrestview({ topline = 2, lnum = 4, col = 0, curswant = 0 })
+    local first_view = vim.fn.winsaveview()
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    session.dispatch("next_page")
+    assert.is_true(session.hide("hard"))
+    assert.same(first_view, vim.fn.winsaveview())
+
+    vim.api.nvim_win_set_cursor(0, { 40, 0 })
+    vim.fn.winrestview({ topline = 25, lnum = 40, col = 0, curswant = 0 })
+    vim.cmd("redraw")
+    local moved_first_view = vim.fn.winsaveview()
+    assert.is_true(session.restore())
+
+    local first_win = vim.api.nvim_get_current_win()
+    local second = vim.api.nvim_create_buf(true, false)
+    vim.bo[second].swapfile = false
+    vim.bo[second].filetype = "lua"
+    vim.api.nvim_buf_set_lines(second, 0, -1, false, { "local second_1 = 1", "local second_2 = 2", "local second_3 = 3", "local second_4 = 4", "local second_5 = 5", "local second_6 = 6" })
+    local extra_second_lines = {}
+    for index = 7, 80 do extra_second_lines[#extra_second_lines + 1] = "local second_" .. index .. " = " .. index end
+    vim.api.nvim_buf_set_lines(second, -1, -1, false, extra_second_lines)
+    local second_win = vim.api.nvim_open_win(second, false, {
+      relative = "editor", width = 40, height = 6, row = 1, col = 1, style = "minimal",
+    })
+    vim.api.nvim_win_set_cursor(second_win, { 40, 0 })
+    vim.api.nvim_win_call(second_win, function()
+      vim.fn.winrestview({ topline = 35, lnum = 40, col = 0, curswant = 0 })
+      vim.cmd("redraw")
+    end)
+    local second_view = vim.api.nvim_win_call(second_win, vim.fn.winsaveview)
+    vim.api.nvim_set_current_win(second_win)
+    vim.api.nvim_exec_autocmds("WinEnter", {})
+    assert.same(moved_first_view, vim.api.nvim_win_call(first_win, vim.fn.winsaveview))
+    assert.is_true(session.hide("hard"))
+    assert.same(second_view, vim.api.nvim_win_call(second_win, vim.fn.winsaveview))
+    session.stop()
+  end)
+
+  it("suspends the mirror for edits and reflows it after a resize", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "long text that will wrap after the window width changes", "two", "three" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      buffer = { layout = { max_total_blocks = 3, max_lines_per_block = 1 } },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    local file = helpers.new_normal_buffer({ "local first = true", "local second = true", "local third = true", "local fourth = true", "local fifth = true" }, "lua")
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    local code_view = vim.fn.winsaveview()
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    local current = session.get()
+
+    vim.api.nvim_exec_autocmds("InsertEnter", { buffer = file })
+    assert.is_false(current.ctx.view_state.mirror.visible)
+    assert.same(code_view, vim.fn.winsaveview())
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+    local edited_view = vim.fn.winsaveview()
+    vim.api.nvim_exec_autocmds("InsertLeave", { buffer = file })
+    assert.same({ chapter_index = 1, line_index = 1, segment_index = 1 }, current.position)
+    assert.is_true(session.hide("hard"))
+    assert.same(edited_view, vim.fn.winsaveview())
+    assert.is_true(session.restore())
+
+    local before_signature = current.ctx.view_state.mirror.layout_signature
+    vim.api.nvim_win_set_width(current.target_win, math.max(10, vim.api.nvim_win_get_width(current.target_win) - 10))
+    vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
+    assert.is_truthy(vim.wait(100, function()
+      return current.ctx.view_state.mirror.layout_signature ~= before_signature
+    end, 5))
+    assert.equal(1, current.position.chapter_index)
+    assert.equal(1, current.position.line_index)
+    assert.equal(1, current.position.segment_index)
+    session.stop()
+  end)
+
   it("follows the active file when mirror reading switches buffers", function()
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)

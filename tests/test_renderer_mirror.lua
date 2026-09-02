@@ -205,6 +205,7 @@ describe("renderer.mirror", function()
     assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
     vim.wo[ctx.target_win].foldmethod = "manual"
     local folded_history = {}
+    local folded_order = {}
     for _ = 1, 8 do
       local candidate
       for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
@@ -217,6 +218,7 @@ describe("renderer.mirror", function()
       end
       if not candidate then break end
       folded_history[candidate] = true
+      folded_order[#folded_order + 1] = candidate
       vim.cmd(("%d,%dfold"):format(candidate, candidate + 1))
       mirror.invalidate_layout(ctx)
       assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
@@ -225,6 +227,7 @@ describe("renderer.mirror", function()
     local current_slots = {}
     for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
       current_slots[slot.row] = true
+      assert.equal(-1, vim.fn.foldclosed(slot.row))
       assert.is_true(ctx.view_state.mirror.observed_fold_rows[slot.row])
     end
     local historical_count = 0
@@ -235,6 +238,16 @@ describe("renderer.mirror", function()
       end
     end
     assert.is_true(historical_count <= ctx.config.buffer.layout.max_total_blocks)
+    local latest_folded
+    for index = #folded_order, 1, -1 do
+      if not current_slots[folded_order[index]]
+        and not ctx.view_state.mirror.observed_fold_rows[folded_order[index]] then
+        latest_folded = folded_order[index]
+        break
+      end
+    end
+    assert.is_not_nil(latest_folded)
+    assert.is_true(vim.fn.foldclosed(latest_folded) ~= -1)
   end)
 
   it("retains cached blocks across hide and clears them on stop", function()

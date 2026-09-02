@@ -1,5 +1,14 @@
 local helpers = require("tests.helpers")
 
+local function assert_prepared(ctx)
+  assert.is_true(ctx.view_state.mirror.visible)
+  assert.is_truthy(next(ctx.view_state.mirror.prepared_by_row or {}))
+end
+
+local function assert_no_persistent_marks(buf, namespace)
+  assert.equal(0, #vim.api.nvim_buf_get_extmarks(buf, namespace, 0, -1, {}))
+end
+
 describe("session integration", function()
   before_each(function()
     helpers.reset_modules()
@@ -23,8 +32,14 @@ describe("session integration", function()
     local cfg = require("ghost-reader.config").setup({
       reader = { renderer = "mirror" },
       buffer = {
-        style = "strong",
-        strong = { visible_lines = 3, max_consecutive_lines = 1 },
+        layout = {
+          region_lines = 4,
+          max_blocks_per_region = 1,
+          max_lines_per_block = 1,
+          min_gap_lines = 1,
+          max_total_blocks = 3,
+          edge_padding = 0,
+        },
       },
       paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
     })
@@ -58,9 +73,8 @@ describe("session integration", function()
 
     assert.is_true(session.dispatch("next_page"))
     assert.equal(4, session.get().position.line_index)
-    local refreshed_rows = current.ctx.view_state.mirror.reader_rows
-    local marks = vim.api.nvim_buf_get_extmarks(current.target_buf, current.ctx.view_state.mirror.namespace, 0, -1, { details = true })
-    local refreshed_text = marks[1][4].virt_text[1][1]
+    assert_prepared(current.ctx)
+    local refreshed_text = current.ctx.view_state.mirror.prepared_by_row[current.ctx.view_state.mirror.active_row].virt_text[1][1]
     assert.is_truthy(refreshed_text:match("four"))
     session.stop()
     assert.is_true(vim.api.nvim_buf_is_valid(target))
@@ -83,9 +97,6 @@ describe("session integration", function()
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({
-      buffer = {
-        light = { visible_lines = 3, max_consecutive_lines = 3 },
-      },
       paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
     })
     local book_path = vim.fn.tempname() .. ".txt"
@@ -99,7 +110,8 @@ describe("session integration", function()
     assert.is_true(session.start(book_path, "mirror"))
     local current = session.get()
     local namespace = current.ctx.view_state.mirror.namespace
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(first, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(first, namespace)
 
     vim.api.nvim_set_current_buf(second)
     vim.api.nvim_exec_autocmds("BufEnter", { buffer = second })
@@ -108,15 +120,19 @@ describe("session integration", function()
     assert.equal(second, current.ctx.target_buf)
     assert.equal(second, vim.api.nvim_win_get_buf(current.target_win))
     assert.equal(1, current.position.line_index)
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(first, namespace, 0, -1, {}))
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(second, namespace, 0, -1, {}) > 0)
+    assert.equal(second, current.ctx.view_state.mirror.target_buf)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(first, namespace)
+    assert_no_persistent_marks(second, namespace)
 
     assert.is_true(session.hide("hard"))
     assert.equal(second, vim.api.nvim_win_get_buf(current.target_win))
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(second, namespace, 0, -1, {}))
+    assert.is_false(current.ctx.view_state.mirror.visible)
+    assert_no_persistent_marks(second, namespace)
     assert.is_true(session.restore())
     assert.equal(second, vim.api.nvim_win_get_buf(current.target_win))
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(second, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(second, namespace)
     assert.is_true(session.hide("hard"))
     assert.equal(second, vim.api.nvim_win_get_buf(current.target_win))
     session.stop()
@@ -146,7 +162,8 @@ describe("session integration", function()
     assert.is_true(session.start(book_path, "mirror"))
     local current = session.get()
     local namespace = current.ctx.view_state.mirror.namespace
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(file, namespace)
 
     local special = vim.api.nvim_create_buf(false, true)
     vim.bo[special].buftype = "nofile"
@@ -155,7 +172,8 @@ describe("session integration", function()
 
     assert.equal(special, vim.api.nvim_get_current_buf())
     assert.equal("HARD_HIDDEN", current.visibility)
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}))
+    assert.is_false(current.ctx.view_state.mirror.visible)
+    assert_no_persistent_marks(file, namespace)
     session.stop()
   end)
 
@@ -188,17 +206,21 @@ describe("session integration", function()
     assert.is_true(session.start(book_path, "mirror"))
     local current = session.get()
     local namespace = current.ctx.view_state.mirror.namespace
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(file, namespace)
 
     vim.api.nvim_exec_autocmds("InsertEnter", { buffer = file })
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}))
+    assert.is_false(current.ctx.view_state.mirror.visible)
+    assert_no_persistent_marks(file, namespace)
     vim.api.nvim_exec_autocmds("InsertLeave", { buffer = file })
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(file, namespace)
 
     assert.is_true(session.hide("hard"))
     vim.api.nvim_exec_autocmds("InsertEnter", { buffer = file })
     vim.api.nvim_exec_autocmds("InsertLeave", { buffer = file })
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(file, namespace, 0, -1, {}))
+    assert.is_false(current.ctx.view_state.mirror.visible)
+    assert_no_persistent_marks(file, namespace)
     session.stop()
   end)
 
@@ -240,7 +262,8 @@ describe("session integration", function()
     assert.is_true(session.start(book_path, "mirror"))
     local current = session.get()
     local namespace = current.ctx.view_state.mirror.namespace
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(first, namespace, 0, -1, {}) > 0)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(first, namespace)
 
     vim.api.nvim_set_current_win(second_win)
     vim.api.nvim_exec_autocmds("WinEnter", {})
@@ -248,12 +271,14 @@ describe("session integration", function()
     assert.equal(second_win, current.target_win)
     assert.equal(second, current.ctx.target_buf)
     assert.equal(second_win, current.ctx.target_win)
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(first, namespace, 0, -1, {}))
-    assert.is_truthy(#vim.api.nvim_buf_get_extmarks(second, namespace, 0, -1, {}) > 0)
+    assert.equal(second, current.ctx.view_state.mirror.target_buf)
+    assert_prepared(current.ctx)
+    assert_no_persistent_marks(first, namespace)
+    assert_no_persistent_marks(second, namespace)
 
     assert.is_true(session.stop())
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(first, namespace, 0, -1, {}))
-    assert.equal(0, #vim.api.nvim_buf_get_extmarks(second, namespace, 0, -1, {}))
+    assert_no_persistent_marks(first, namespace)
+    assert_no_persistent_marks(second, namespace)
     assert.is_true(vim.api.nvim_win_is_valid(first_win))
     assert.is_true(vim.api.nvim_win_is_valid(second_win))
   end)

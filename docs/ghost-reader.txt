@@ -63,24 +63,64 @@ not need to be duplicated in both `keys` and `opts.keymaps`.
 ==============================================================================
 4. Mirror                                          |ghost-reader-mirror|
 
-mirror mode uses virtual text over the current normal file buffer as a visual
-code disguise. Buffer tabs, names, text, modified state, undo history,
-diagnostics, and LSP input remain unchanged. The renderer writes book segments
-as valid comments and follows buffer or window changes while reading remains
-visible.
+mirror mode uses window-local ephemeral virtual text over the current normal
+file buffer as a visual code disguise. Buffer tabs, names, real buffer text,
+modified state, undo history, diagnostics, LSP input, and peer windows remain
+unchanged. Book segments are rendered as valid comments and follow the active
+buffer or window while reading remains visible.
 
-Two styles are available through `buffer.style`:
+The renderer distributes content blocks through regions of the full buffer.
+`j` and `k` move the cursor to the next or previous block anchor, skipping
+ordinary code rows. At a batch boundary, the occupied slots are reused for the
+next or previous batch, so movement continues to look like navigating comments
+in the file. Hard hide saves and restores the code cursor and window view from
+before reading. Entering terminal, help, prompt, quickfix, or another special
+buffer temporarily hard-hides mirror; restore it after returning to a normal
+file buffer.
 
-  - light: reading lines are grouped together for easier reading
-  - strong: reading lines are distributed through the visible code lines
+The layout is configured with `buffer.layout`:
 
-`j` and `k` move the cursor between reading lines and skip non-reading code
-rows. Entering terminal, help, prompt, quickfix, or another special buffer
-temporarily hard-hides mirror; restore it after returning to a normal file
-buffer.
-`buffer.<style>.visible_lines` controls the number of book lines loaded in one
-view. `buffer.<style>.max_consecutive_lines` limits the number of adjacent book
-lines in each group. The defaults are light `6/6` and strong `3/1`.
+  `region_lines`             Size of each layout region; positive integer,
+                             default 50.
+  `max_blocks_per_region`    Maximum blocks in one region; positive integer,
+                             default 3.
+  `max_lines_per_block`      Maximum display lines in one block; positive
+                             integer, default 2.
+  `min_gap_lines`            Minimum ordinary rows between block reservations;
+                             non-negative integer, default 6.
+  `max_total_blocks`         Maximum blocks in one batch; positive integer,
+                             default 12.
+  `edge_padding`             Reserved rows at the beginning and end;
+                             non-negative integer, default 2.
+
+The virtual text priority is configured separately by
+`buffer.virt_text_priority`, a positive integer with default `1000`. The
+renderer uses overlay replacement and hides the underlying row text at a block
+anchor to keep code annotations and line-level virtual text from obscuring the
+reading content. Resizing the window reflows the prepared blocks. While mirror
+is visible, InsertEnter temporarily removes its output; InsertLeave captures
+the updated code view and redraws it.
+
+For example:
+
+>lua
+  buffer = {
+    layout = {
+      region_lines = 50,
+      max_blocks_per_region = 3,
+      max_lines_per_block = 2,
+      min_gap_lines = 6,
+      max_total_blocks = 12,
+      edge_padding = 2,
+    },
+    virt_text_priority = 1000,
+  }
+<
+
+The old `buffer.preset` option is silently accepted as a no-op for
+compatibility, but should be removed from new configurations. The old
+`style`, `light`, and `strong` fields are retained only for migration; use
+`buffer.layout` for new setups.
 
 ==============================================================================
 5. Statusline                                      |ghost-reader-statusline|
@@ -128,9 +168,10 @@ restores captured mappings; restoring immediately installs the reading keys
 again. A single `<Esc>` keeps its native Neovim behavior. Keys not configured
 as reading keys also keep their native behavior.
 
-While statusline reading stays visible, mappings move from the old buffer to
-the current buffer when windows or buffers change. The float and autoplay keep
-running.
+While reading stays visible, mappings move from the old buffer to the current
+active buffer when windows or buffers change. Mirror decorations are scoped to
+the target window; statusline's float and autoplay keep running. Entering a
+special buffer temporarily hides mirror output.
 
 ==============================================================================
 8. Configuration                                   |ghost-reader-config|
@@ -148,15 +189,15 @@ table under `opts`; call `setup()` directly only for a manual configuration.
       renderer = "mirror",
     },
     buffer = {
-      style = "light",
-      light = {
-        visible_lines = 6,
-        max_consecutive_lines = 6,
+      layout = {
+        region_lines = 50,
+        max_blocks_per_region = 3,
+        max_lines_per_block = 2,
+        min_gap_lines = 6,
+        max_total_blocks = 12,
+        edge_padding = 2,
       },
-      strong = {
-        visible_lines = 3,
-        max_consecutive_lines = 1,
-      },
+      virt_text_priority = 1000,
     },
     statusline = {
       interval = 3000,
@@ -206,7 +247,11 @@ table under `opts`; call `setup()` directly only for a manual configuration.
 If `:GhostReaderStatusline` opens nothing, check that the current buffer is
 still valid and that another plugin has not replaced the window.
 
-If mirror appears blank, check the active style's `visible_lines`, the current
-window width, and whether the source file is readable text.
+If mirror appears blank, check that the current window has enough usable buffer
+rows, that `buffer.layout` is not too restrictive, and that the source file is
+readable text. If `j` or `k` does not move, ensure mirror is visible: these
+keys are buffer-local reading mappings and move by content block, not by every
+code row. If an older configuration contains `buffer.preset`, it is harmless
+but has no effect and should be removed.
 
  vim:tw=78:ts=8:ft=help:norl:

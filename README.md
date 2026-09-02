@@ -85,11 +85,12 @@ statusline：
 mirror：
 
 - 默认的 buffer 阅读模式。
-- 书籍内容以当前语言的注释形式显示在当前活动文件上，顶部 Tab 和文件名保持不变。
-- 使用虚拟文本，不会改写原代码、modified 状态、undo、LSP 或诊断信息。
-- `light` 和 `strong` 控制阅读内容在当前可见代码行中的分布方式。
-- `j/k` 会把光标跳到下一条/上一条阅读行；切换 buffer 或窗口时阅读标记和快捷键会跟随当前文件。
-- `visible_lines` 控制一屏阅读行数，`max_consecutive_lines` 控制连续阅读行的上限。
+- 书籍内容以当前语言的注释形式显示在当前真实活动文件上，顶部 Tab、文件名和当前活动 buffer 保持不变。
+- 使用窗口局部的临时虚拟文本，不会改写原代码、modified 状态、undo、LSP、诊断或其他窗口中的同一 buffer。
+- 内容会按区域分散到整个 buffer，像代码中的注释一样形成多个阅读块；布局只在可见区域绘制，并使用较高优先级避免被行级注释信息遮挡。
+- `j/k` 会把光标跳到下一个/上一个内容块的锚点，跨越当前批次边界时会复用布局位置加载下一批或上一批内容。
+- 切换 buffer 或窗口时，阅读会跟随当前活动文件；硬隐藏会保存并恢复进入阅读前的代码光标和窗口视图。
+- 在 mirror 可见时进入插入模式会暂时移除阅读内容，退出插入模式后重新捕获代码视图并刷新布局；窗口尺寸改变也会触发重新布局。
 
 ## Stealth 事件
 
@@ -107,15 +108,15 @@ require("ghost-reader").setup({
     renderer = "mirror",
   },
   buffer = {
-    style = "light", -- "light" 或 "strong"
-    light = {
-      visible_lines = 6,
-      max_consecutive_lines = 6,
+    layout = {
+      region_lines = 50,
+      max_blocks_per_region = 3,
+      max_lines_per_block = 2,
+      min_gap_lines = 6,
+      max_total_blocks = 12,
+      edge_padding = 2,
     },
-    strong = {
-      visible_lines = 3,
-      max_consecutive_lines = 1,
-    },
+    virt_text_priority = 1000,
   },
   statusline = {
     interval = 3000,
@@ -159,6 +160,18 @@ require("ghost-reader").setup({
 })
 ```
 
+`buffer.layout` 将真实 buffer 划分为多个区域，并限制每个区域的内容块数量。
+内容块不会集中在光标附近：`region_lines` 是区域大小，
+`max_blocks_per_region` 是每个区域最多的块数，`max_lines_per_block` 是每个块
+最多显示的行数，`min_gap_lines` 是相邻块之间的最小空行数，
+`max_total_blocks` 限制一批内容的总块数，`edge_padding` 保留 buffer 首尾的
+空白行。除 `min_gap_lines` 和 `edge_padding` 允许为零外，其余布局数值均为正整数。
+
+`virt_text_priority` 控制 mirror 虚拟文本的绘制优先级，默认值为 `1000`。
+旧配置中的 `buffer.preset` 会被静默接受但不会产生任何效果；迁移后应删除它。
+旧的 `style`、`light`、`strong` 配置仍可用于兼容迁移，但新配置建议只使用
+`buffer.layout`。
+
 ## 需求
 
 - Neovim 0.10+
@@ -168,4 +181,6 @@ require("ghost-reader").setup({
 ## 排查
 
 - 如果 `:GhostReaderStatusline` 没有弹出浮窗，先确认当前窗口没有被其他插件强制改写。
-- 如果 mirror 中看不到内容，检查当前样式的 `visible_lines`、窗口宽度，以及当前文件是否真的可读。
+- 如果 mirror 中看不到内容，检查当前窗口是否有足够的可用 buffer 行、布局限制是否过于严格，以及当前文件是否真的可读。
+- 如果 `j/k` 没有移动到阅读内容，确认 mirror 仍处于可见状态；它们只在阅读可见时绑定，并按内容块而不是代码行移动。
+- 如果当前行出现其他插件的行级文字，mirror 会使用 `virt_text_priority` 和覆盖模式绘制；可适当提高该值，但视觉伪装仍不是安全边界。

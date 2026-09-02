@@ -110,6 +110,31 @@ local function ensure_slots(ctx)
   return mirror.slots or {}
 end
 
+local function observe_fold_state(ctx, mirror)
+  mirror.observed_fold_rows = mirror.observed_fold_rows or {}
+  for _, slot in ipairs(mirror.slots or {}) do
+    mirror.observed_fold_rows[slot.row] = true
+  end
+  local snapshot = {}
+  for row in pairs(mirror.observed_fold_rows) do
+    if row <= vim.api.nvim_buf_line_count(ctx.target_buf) then
+      snapshot[row] = is_folded(ctx, row)
+    end
+  end
+  local changed = mirror.fold_snapshot ~= nil and not vim.deep_equal(mirror.fold_snapshot, snapshot)
+  mirror.fold_snapshot = snapshot
+  if not changed or mirror.fold_change_pending or not mirror.on_fold_change then
+    return
+  end
+  mirror.fold_change_pending = true
+  vim.schedule(function()
+    mirror.fold_change_pending = false
+    if mirror.visible and mirror.on_fold_change then
+      mirror.on_fold_change()
+    end
+  end)
+end
+
 local function padded_comment(ctx, row, text)
   local source = vim.api.nvim_buf_get_lines(ctx.target_buf, row - 1, row, false)[1] or ""
   local indent = source:match("^%s*") or ""
@@ -181,6 +206,7 @@ local function draw_window(namespace, win, buf, top, bottom)
   if not mirror or not mirror.visible or mirror.target_win ~= win or mirror.target_buf ~= buf then
     return false
   end
+  observe_fold_state(mirror.ctx, mirror)
   for row = top + 1, bottom do
     local prepared = mirror.prepared_by_row and mirror.prepared_by_row[row]
     if prepared then
@@ -256,7 +282,12 @@ function M.render(ctx, frame)
 
   mirror.target_win = ctx.target_win
   mirror.target_buf = ctx.target_buf
+  mirror.ctx = ctx
   mirror.priority = priority
+  mirror.on_fold_change = ctx.on_fold_change
+  if mirror.fold_snapshot == nil then
+    observe_fold_state(ctx, mirror)
+  end
   mirror.visible = true
   provider_registry[mirror.namespace] = mirror
   request_redraw()
@@ -284,6 +315,7 @@ end
 function M.invalidate_layout(ctx)
   local mirror = state(ctx)
   mirror.layout_signature = nil
+  mirror.fold_snapshot = nil
 end
 
 function M.stop(ctx)
@@ -302,6 +334,10 @@ function M.stop(ctx)
   mirror.target_win = nil
   mirror.target_buf = nil
   mirror.priority = nil
+  mirror.on_fold_change = nil
+  mirror.fold_snapshot = nil
+  mirror.observed_fold_rows = nil
+  mirror.fold_change_pending = nil
   return true
 end
 

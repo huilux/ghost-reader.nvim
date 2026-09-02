@@ -159,7 +159,7 @@ describe("session integration", function()
 
     vim.api.nvim_win_set_cursor(0, { 40, 0 })
     vim.fn.winrestview({ topline = 25, lnum = 40, col = 0, curswant = 0 })
-    vim.cmd("redraw")
+    vim.cmd("redraw!")
     local moved_first_view = vim.fn.winsaveview()
     assert.is_true(session.restore())
 
@@ -275,15 +275,7 @@ describe("session integration", function()
       vim.wo[current.target_win].foldmethod = "manual"
       vim.cmd(('%d,%dfold'):format(fold_start, fold_end))
     end)
-    local has_fold_events = vim.fn.exists("##FoldClosed") == 1 and vim.fn.exists("##FoldOpened") == 1
-    if has_fold_events then
-      local registered = vim.api.nvim_get_autocmds({ group = current.autocmd_group, event = "FoldClosed" })
-      assert.is_true(#registered > 0)
-      vim.api.nvim_exec_autocmds("FoldClosed", { buffer = file })
-    else
-      current.renderer.invalidate_layout(current.ctx)
-      vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
-    end
+    vim.cmd("redraw!")
     assert.is_truthy(vim.wait(100, function()
       local active_row = current.ctx.view_state.mirror.active_row
       return active_row ~= old_active and active_row ~= nil
@@ -298,12 +290,7 @@ describe("session integration", function()
       vim.cmd(('%d,%dfoldopen'):format(fold_start, fold_end))
     end)
     assert.is_true(ok, err)
-    if has_fold_events then
-      vim.api.nvim_exec_autocmds("FoldOpened", { buffer = file })
-    else
-      current.renderer.invalidate_layout(current.ctx)
-      vim.api.nvim_exec_autocmds("WinResized", { data = { windows = { current.target_win } } })
-    end
+    vim.cmd("redraw!")
     assert.is_truthy(vim.wait(100, function()
       return current.visibility == "VISIBLE"
         and not vim.deep_equal(current.ctx.view_state.mirror.reader_rows, folded_rows)

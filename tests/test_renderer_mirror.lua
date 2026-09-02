@@ -195,6 +195,48 @@ describe("renderer.mirror", function()
     assert.is_true(vim.tbl_count(ctx.view_state.mirror.observed_fold_rows) <= ctx.config.buffer.layout.max_total_blocks)
   end)
 
+  it("bounds distinct folded slot history while retaining current slots", function()
+    local ctx = make_context(100)
+    ctx.config.buffer.layout.region_lines = 10
+    ctx.config.buffer.layout.max_blocks_per_region = 1
+    ctx.config.buffer.layout.max_total_blocks = 2
+    ctx.config.buffer.layout.max_lines_per_block = 1
+    ctx.config.buffer.layout.edge_padding = 0
+    assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    vim.wo[ctx.target_win].foldmethod = "manual"
+    local folded_history = {}
+    for _ = 1, 8 do
+      local candidate
+      for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
+        if not folded_history[slot.row]
+          and vim.fn.foldclosed(slot.row) == -1
+          and slot.row < vim.api.nvim_buf_line_count(ctx.target_buf) then
+          candidate = slot.row
+          break
+        end
+      end
+      if not candidate then break end
+      folded_history[candidate] = true
+      vim.cmd(("%d,%dfold"):format(candidate, candidate + 1))
+      mirror.invalidate_layout(ctx)
+      assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    end
+    assert.is_true(vim.tbl_count(folded_history) > ctx.config.buffer.layout.max_total_blocks)
+    local current_slots = {}
+    for _, slot in ipairs(ctx.view_state.mirror.slots or {}) do
+      current_slots[slot.row] = true
+      assert.is_true(ctx.view_state.mirror.observed_fold_rows[slot.row])
+    end
+    local historical_count = 0
+    for row in pairs(ctx.view_state.mirror.observed_fold_rows or {}) do
+      if not current_slots[row] then
+        historical_count = historical_count + 1
+        assert.is_true(vim.fn.foldclosed(row) ~= -1)
+      end
+    end
+    assert.is_true(historical_count <= ctx.config.buffer.layout.max_total_blocks)
+  end)
+
   it("retains cached blocks across hide and clears them on stop", function()
     local ctx = make_context(100)
     assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))

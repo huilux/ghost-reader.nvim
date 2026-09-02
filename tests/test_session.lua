@@ -440,6 +440,56 @@ describe("session", function()
     session.stop()
   end)
 
+  it("renders a previous-content boundary as a backward batch ending at the requested position", function()
+    local frames = {}
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "one", "two", "three", "four" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer"] = {
+      create = function()
+        return {
+          render = function(_, frame)
+            frames[#frames + 1] = vim.deepcopy(frame)
+            return true
+          end,
+          hide = function() return true end,
+          restore = function() return true end,
+          stop = function() return true end,
+          page_size = function() return 3 end,
+          segment_count = function() return 1 end,
+          segment_text = function(_, text) return text end,
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({ "local value = true" }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    assert.is_true(session.dispatch("next_content"))
+    assert.is_true(session.dispatch("next_content"))
+    assert.is_true(session.dispatch("next_content"))
+    assert.is_true(session.dispatch("prev_content"))
+
+    local backward_frame = frames[#frames]
+    assert.same({ chapter_index = 1, line_index = 3, segment_index = 1 }, backward_frame.position)
+    assert.same({ "one", "two", "three" }, vim.tbl_map(function(block) return block.text end, backward_frame.blocks))
+    assert.is_false(backward_frame.blocks[1].active)
+    assert.is_false(backward_frame.blocks[2].active)
+    assert.is_true(backward_frame.blocks[3].active)
+    session.stop()
+  end)
+
   it("exposes the active renderer segment callbacks in frame rendering", function()
     local segment_calls = { count = 0, text = 0 }
     package.loaded["ghost-reader.bookshelf"] = {

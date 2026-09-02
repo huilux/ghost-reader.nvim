@@ -110,11 +110,32 @@ local function ensure_slots(ctx)
   return mirror.slots or {}
 end
 
-local function observe_fold_state(ctx, mirror)
-  mirror.observed_fold_rows = mirror.observed_fold_rows or {}
+local function collect_fold_rows(ctx, mirror)
+  local current = {}
   for _, slot in ipairs(mirror.slots or {}) do
-    mirror.observed_fold_rows[slot.row] = true
+    current[slot.row] = true
   end
+  local retained = {}
+  for row in pairs(mirror.observed_fold_rows or {}) do
+    if not current[row] and is_folded(ctx, row) then
+      retained[#retained + 1] = row
+    end
+  end
+  table.sort(retained)
+  local limit = math.max(1, (ctx.config.buffer.layout or {}).max_total_blocks or 12)
+  local observed = {}
+  for _, row in ipairs(vim.tbl_keys(current)) do
+    observed[row] = true
+  end
+  for index = 1, math.min(limit, #retained) do
+    local row = retained[index]
+    observed[row] = true
+  end
+  return observed
+end
+
+local function observe_fold_state(ctx, mirror)
+  mirror.observed_fold_rows = collect_fold_rows(ctx, mirror)
   local snapshot = {}
   for row in pairs(mirror.observed_fold_rows) do
     if row <= vim.api.nvim_buf_line_count(ctx.target_buf) then
@@ -315,6 +336,7 @@ end
 function M.invalidate_layout(ctx)
   local mirror = state(ctx)
   mirror.layout_signature = nil
+  mirror.observed_fold_rows = collect_fold_rows(ctx, mirror)
   mirror.fold_snapshot = nil
 end
 

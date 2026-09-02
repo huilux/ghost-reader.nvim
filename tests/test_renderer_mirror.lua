@@ -188,6 +188,11 @@ describe("renderer.mirror", function()
     for _, row in ipairs(ctx.view_state.mirror.reader_rows) do
       assert.is_false(vim.api.nvim_win_call(ctx.target_win, function() return vim.fn.foldclosed(row) ~= -1 end))
     end
+    for _ = 1, 20 do
+      mirror.invalidate_layout(ctx)
+      assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
+    end
+    assert.is_true(vim.tbl_count(ctx.view_state.mirror.observed_fold_rows) <= ctx.config.buffer.layout.max_total_blocks)
   end)
 
   it("retains cached blocks across hide and clears them on stop", function()

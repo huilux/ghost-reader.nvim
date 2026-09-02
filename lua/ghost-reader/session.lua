@@ -121,6 +121,60 @@ local function stop_renderer(session)
   end
 end
 
+local function mirror_target_supported(buf, win)
+  if not active or active.mode ~= "mirror" then
+    return true
+  end
+  if active.renderer and active.renderer.supports then
+    return active.renderer.supports(buf, win)
+  end
+  return vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win)
+end
+
+local function adopt_target(render)
+  if not active or active.mode ~= "mirror" then
+    return true
+  end
+
+  local next_buf = vim.api.nvim_get_current_buf()
+  local next_win = vim.api.nvim_get_current_win()
+  if not mirror_target_supported(next_buf, next_win) then
+    keymaps.detach(active)
+    if active.renderer.hide then
+      pcall(active.renderer.hide, active.ctx)
+    end
+    active.visibility = "HARD_HIDDEN"
+    active.hidden_policy = "hard"
+    active.insert_suspended = false
+    return false
+  end
+
+  local changed = active.target_buf ~= next_buf or active.target_win ~= next_win
+  if changed then
+    keymaps.detach(active)
+    if active.renderer.hide then
+      pcall(active.renderer.hide, active.ctx)
+    end
+    active.target_buf = next_buf
+    active.target_win = next_win
+    active.ctx.target_buf = next_buf
+    active.ctx.target_win = next_win
+  end
+
+  if render and active.visibility == "VISIBLE" then
+    local ok, rendered = pcall(render_current)
+    if not ok or rendered == false then
+      keymaps.detach(active)
+      active.visibility = "HARD_HIDDEN"
+      active.hidden_policy = "hard"
+      active.insert_suspended = false
+      return false
+    end
+    keymaps.attach(active, active.config, reader_buffer(active))
+  end
+  return true
+end
+
 local function setup_autocmds()
   if active.autocmd_group then
     pcall(vim.api.nvim_del_augroup_by_id, active.autocmd_group)
@@ -161,6 +215,53 @@ local function setup_autocmds()
     callback = function()
       if is_current_session() and active.mode == "statusline" and active.visibility == "VISIBLE" then
         keymaps.attach(active, active.config, vim.api.nvim_get_current_buf())
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("BufLeave", {
+    group = active.autocmd_group,
+    callback = function(args)
+      if is_current_session() and active.mode == "mirror" and active.visibility == "VISIBLE"
+        and args.buf == active.target_buf then
+        keymaps.detach(active)
+        if active.renderer.hide then
+          active.renderer.hide(active.ctx)
+        end
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+    group = active.autocmd_group,
+    callback = function()
+      if is_current_session() and active.mode == "mirror" and active.visibility == "VISIBLE" then
+        adopt_target(true)
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("InsertEnter", {
+    group = active.autocmd_group,
+    callback = function()
+      if is_current_session() and active.mode == "mirror" and active.visibility == "VISIBLE" then
+        active.insert_suspended = true
+        if active.renderer.hide then
+          active.renderer.hide(active.ctx)
+        end
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("InsertLeave", {
+    group = active.autocmd_group,
+    callback = function()
+      if not is_current_session() or active.mode ~= "mirror" or not active.insert_suspended then
+        return
+      end
+      active.insert_suspended = false
+      if active.visibility == "VISIBLE" then
+        adopt_target(true)
       end
     end,
   })
@@ -285,6 +386,9 @@ function M.hide(policy)
   if not active then
     return false
   end
+  if active.mode == "mirror" and active.visibility == "VISIBLE" then
+    adopt_target(false)
+  end
   if policy == "soft" then
     if active.visibility == "HARD_HIDDEN" then
       return false
@@ -322,7 +426,16 @@ function M.restore()
   active.visibility = "VISIBLE"
   active.transitioning = true
   local ok, restored
-  if active.renderer.restore and active.hidden_policy ~= nil then
+  local adopted = true
+  if active.mode == "mirror" then
+    adopted = adopt_target(false)
+  end
+  if not adopted then
+    active.transitioning = nil
+    active.visibility = "HARD_HIDDEN"
+    active.hidden_policy = "hard"
+    return false
+  elseif active.renderer.restore and active.hidden_policy ~= nil then
     ok, restored = pcall(active.renderer.restore, active.ctx, frame_for(active.position))
   else
     ok, restored = pcall(render_current)
@@ -333,6 +446,7 @@ function M.restore()
     return false
   end
   active.hidden_policy = nil
+  active.insert_suspended = false
   keymaps.attach(active, active.config, reader_buffer(active))
   return true
 end

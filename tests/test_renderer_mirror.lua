@@ -177,6 +177,7 @@ describe("renderer.mirror", function()
     ctx.config.buffer.layout.region_lines = 10
     ctx.config.buffer.layout.max_blocks_per_region = 1
     ctx.config.buffer.layout.max_total_blocks = 10
+    ctx.config.buffer.layout.edge_padding = 0
     assert.is_true(mirror.render(ctx, frame(1, { block(1, { "one" }, true) })))
     vim.api.nvim_buf_call(ctx.target_buf, function()
       vim.wo[ctx.target_win].foldmethod = "manual"

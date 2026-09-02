@@ -1,7 +1,10 @@
-local M = {}
+local layout = require("ghost-reader.renderer.mirror_layout")
 local utils = require("ghost-reader.utils")
 
+local M = {}
 local namespace_name = "GhostReaderMirror"
+local provider_registry = {}
+local installed_providers = {}
 
 local comment_prefixes = {
   lua = { "-- ", "" },
@@ -23,26 +26,16 @@ local comment_prefixes = {
 
 local function state(ctx)
   ctx.view_state.mirror = ctx.view_state.mirror or {}
-  local mirror = ctx.view_state.mirror
-  mirror.touched_buffers = mirror.touched_buffers or {}
-  return mirror
+  return ctx.view_state.mirror
 end
 
-local function buffer_style_config(ctx)
+local function mirror_config(ctx)
   local buffer = ctx.config and ctx.config.buffer or {}
-  local style = buffer.style or "light"
-  local style_config = buffer[style] or {}
-  return style, style_config, 3
-end
-
-local function comment_parts(filetype)
-  return unpack(comment_prefixes[filetype] or { "// ", "" })
+  return buffer.layout or {}, buffer.virt_text_priority or 1000
 end
 
 local function position_key(position)
-  if not position or position.chapter_index == nil or position.line_index == nil then
-    return nil
-  end
+  if not position or position.chapter_index == nil or position.line_index == nil then return nil end
   return table.concat({ position.chapter_index, position.line_index, position.segment_index or 1 }, ":")
 end
 
@@ -50,171 +43,167 @@ local function block_key(block)
   return position_key(block and (block.position or block))
 end
 
-local function visible_lines(ctx, frame)
-  local blocks = frame and frame.blocks or {}
-  local _, style_config, fallback = buffer_style_config(ctx)
-  local limit = style_config.visible_lines or fallback
-  local visible = {}
-  for i = 1, math.min(#blocks, limit) do
-    visible[#visible + 1] = blocks[i]
-  end
-  return visible
-end
-
-local function group_sizes(count, max_consecutive)
-  local sizes = {}
-  local remaining = count
-  while remaining > 0 do
-    local size = math.min(max_consecutive, remaining)
-    sizes[#sizes + 1] = size
-    remaining = remaining - size
-  end
-  return sizes
-end
-
-local function light_rows(line_count, sizes)
-  local total = 0
-  for _, size in ipairs(sizes) do
-    total = total + size
-  end
-  local needed = total + math.max(0, #sizes - 1)
-  if line_count <= needed then
-    local rows = {}
-    for row = 1, math.min(line_count, total) do
-      rows[#rows + 1] = row
-    end
-    return rows
-  end
-
-  local rows = {}
-  local row = math.floor((line_count - needed) / 2) + 1
-  local index = 1
-  for group, size in ipairs(sizes) do
-    for _ = 1, size do
-      rows[index] = row
-      index = index + 1
-      row = row + 1
-    end
-    if group < #sizes then
-      row = row + 1
-    end
-  end
-  return rows
-end
-
-local function strong_rows(line_count, sizes)
-  local total = 0
-  for _, size in ipairs(sizes) do
-    total = total + size
-  end
-  local gaps = math.max(0, #sizes - 1)
-  if line_count <= total + gaps then
-    return light_rows(line_count, sizes)
-  end
-
-  local rows = {}
-  local previous_end = 0
-  local index = 1
-  for group, size in ipairs(sizes) do
-    local available = math.max(1, line_count - size)
-    local row = math.floor(available * group / (#sizes + 1)) + 1
-    row = math.max(row, previous_end + 2)
-    if row + size - 1 > line_count then
-      row = line_count - size + 1
-    end
-    for offset = 0, size - 1 do
-      rows[index] = row + offset
-      index = index + 1
-    end
-    previous_end = row + size - 1
-  end
-  return rows
-end
-
-local function visible_range(ctx)
-  local range = vim.api.nvim_win_call(ctx.target_win, function()
-    return { vim.fn.line("w0"), vim.fn.line("w$") }
-  end)
-  local top, bottom = range[1], range[2]
-  local line_count = vim.api.nvim_buf_line_count(ctx.target_buf)
-  top = math.max(1, math.min(top, line_count))
-  bottom = math.max(top, math.min(bottom, line_count))
-  return top, bottom
-end
-
-local function anchor_rows(ctx, count)
-  local top, bottom = visible_range(ctx)
-  local available = bottom - top + 1
-  count = math.min(count, available)
-  if count <= 0 then
-    return {}
-  end
-
-  local style, style_config, fallback = buffer_style_config(ctx)
-  local max_consecutive = math.min(style_config.max_consecutive_lines or count, count)
-  max_consecutive = math.max(1, max_consecutive > 0 and max_consecutive or fallback)
-  local sizes = group_sizes(count, max_consecutive)
-  local local_rows
-  if style == "strong" then
-    local_rows = strong_rows(available, sizes)
-  else
-    local_rows = light_rows(available, sizes)
-  end
-
-  local rows = {}
-  local used = {}
-  for _, row in ipairs(local_rows) do
-    local absolute = top + row - 1
-    if not used[absolute] then
-      rows[#rows + 1] = absolute
-      used[absolute] = true
-    end
-  end
-  return rows
-end
-
-local function clear_buffer(mirror, buf)
-  if mirror.namespace and buf and vim.api.nvim_buf_is_valid(buf) then
-    vim.api.nvim_buf_clear_namespace(buf, mirror.namespace, 0, -1)
-  end
-end
-
-local function clear_marks(ctx)
-  local mirror = state(ctx)
-  clear_buffer(mirror, ctx.target_buf)
-  mirror.rendered_rows = nil
-  mirror.reader_rows = nil
-  mirror.rendered_blocks = nil
-  mirror.rendered_by_key = nil
-  mirror.mark_ids = nil
-  mirror.active_row = nil
+local function comment_parts(buf)
+  return unpack(comment_prefixes[vim.bo[buf].filetype] or { "// ", "" })
 end
 
 local function display_width(text)
   return vim.fn.strwidth(text or "")
 end
 
-local function render_text(ctx, text)
-  local filetype = vim.bo[ctx.target_buf].filetype
-  local prefix, suffix = comment_parts(filetype)
-  local width = math.max(20, vim.api.nvim_win_get_width(ctx.target_win))
-  local content = prefix .. (text or "") .. suffix
-  local padding = math.max(0, width - display_width(content))
-  return content .. string.rep(" ", padding)
+local function usable_width(ctx)
+  local info = vim.fn.getwininfo(ctx.target_win)[1] or {}
+  return math.max(1, vim.api.nvim_win_get_width(ctx.target_win) - (info.textoff or 0))
 end
 
-local function activate(ctx, row)
+local function text_width(ctx)
+  local prefix, suffix = comment_parts(ctx.target_buf)
+  return math.max(1, usable_width(ctx) - display_width(prefix) - display_width(suffix))
+end
+
+local function wrapped_lines(ctx, text)
+  local lines = vim.split(text or "", "\n", { plain = true })
+  local wrapped = {}
+  for _, line in ipairs(lines) do
+    for _, segment in ipairs(utils.wrap_display(line, text_width(ctx))) do
+      wrapped[#wrapped + 1] = segment
+    end
+  end
+  return #wrapped > 0 and wrapped or { "" }
+end
+
+local function is_folded(ctx, row)
+  return vim.api.nvim_win_call(ctx.target_win, function()
+    return vim.fn.foldclosed(row) ~= -1
+  end)
+end
+
+local function layout_signature(ctx, opts)
+  return table.concat({
+    ctx.target_buf,
+    ctx.target_win,
+    vim.api.nvim_buf_line_count(ctx.target_buf),
+    usable_width(ctx),
+    opts.region_lines or 0,
+    opts.max_blocks_per_region or 0,
+    opts.max_lines_per_block or 0,
+    opts.min_gap_lines or 0,
+    opts.max_total_blocks or 0,
+    opts.edge_padding or 0,
+  }, ":")
+end
+
+local function ensure_slots(ctx)
   local mirror = state(ctx)
-  if not mirror.namespace or not row then
+  local opts = mirror_config(ctx)
+  local signature = layout_signature(ctx, opts)
+  if mirror.layout_signature ~= signature then
+    mirror.slots = layout.slots(vim.api.nvim_buf_line_count(ctx.target_buf), opts, function(row)
+      return is_folded(ctx, row)
+    end)
+    mirror.layout_signature = signature
+    mirror.prepared_by_row = nil
+    mirror.rendered_by_key = nil
+    mirror.reader_rows = nil
+    mirror.active_row = nil
+  end
+  return mirror.slots or {}
+end
+
+local function padded_comment(ctx, row, text)
+  local source = vim.api.nvim_buf_get_lines(ctx.target_buf, row - 1, row, false)[1] or ""
+  local indent = source:match("^%s*") or ""
+  local prefix, suffix = comment_parts(ctx.target_buf)
+  local width = usable_width(ctx)
+  local content = indent .. prefix .. (text or "") .. suffix
+  if display_width(content) > width then
+    content = prefix .. (text or "") .. suffix
+  end
+  return content .. string.rep(" ", math.max(0, width - display_width(content)))
+end
+
+local function prepare_rows(ctx, blocks, slots)
+  local mirror = state(ctx)
+  local prepared_by_row = {}
+  local rendered_by_key = {}
+  local reader_rows = {}
+  for index = 1, math.min(#blocks, #slots) do
+    local slot = slots[index]
+    local block = blocks[index]
+    local key = block_key(block)
+    reader_rows[index] = slot.row
+    if key then rendered_by_key[key] = slot.row end
+    local content = type(block.text) == "table" and block.text or { block.text or "" }
+    for offset = 0, slot.height - 1 do
+      local row = slot.row + offset
+      prepared_by_row[row] = {
+        virt_text = {{ padded_comment(ctx, row, content[offset + 1] or ""), "GhostReaderMirror" }},
+      }
+    end
+  end
+  mirror.prepared_by_row = prepared_by_row
+  mirror.rendered_by_key = rendered_by_key
+  mirror.reader_rows = reader_rows
+end
+
+local function request_redraw()
+  vim.cmd("redraw")
+end
+
+local function capture_view(ctx, mirror)
+  if not mirror.saved_view then
+    mirror.saved_view = vim.api.nvim_win_call(ctx.target_win, vim.fn.winsaveview)
+  end
+end
+
+local function restore_view(ctx, mirror)
+  if mirror.saved_view and vim.api.nvim_win_is_valid(ctx.target_win) then
+    vim.api.nvim_win_call(ctx.target_win, function()
+      vim.fn.winrestview(mirror.saved_view)
+    end)
+  end
+  mirror.saved_view = nil
+end
+
+local function activate(ctx, mirror, row)
+  if not row or not vim.api.nvim_win_is_valid(ctx.target_win)
+    or vim.api.nvim_win_get_buf(ctx.target_win) ~= ctx.target_buf then
     return false
   end
   mirror.active_row = row
-  if vim.api.nvim_win_is_valid(ctx.target_win)
-    and vim.api.nvim_win_get_buf(ctx.target_win) == ctx.target_buf then
-    local cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
-    vim.api.nvim_win_set_cursor(ctx.target_win, { row, cursor[2] })
-  end
+  local cursor = vim.api.nvim_win_get_cursor(ctx.target_win)
+  vim.api.nvim_win_set_cursor(ctx.target_win, { row, cursor[2] })
   return true
+end
+
+local function draw_window(namespace, win, buf, top, bottom)
+  local mirror = provider_registry[namespace]
+  if not mirror or not mirror.visible or mirror.target_win ~= win or mirror.target_buf ~= buf then
+    return false
+  end
+  for row = top + 1, bottom do
+    local prepared = mirror.prepared_by_row and mirror.prepared_by_row[row]
+    if prepared then
+      vim.api.nvim_buf_set_extmark(buf, namespace, row - 1, 0, {
+        ephemeral = true,
+        virt_text = prepared.virt_text,
+        virt_text_pos = "overlay",
+        virt_text_hide = true,
+        hl_mode = "replace",
+        priority = mirror.priority,
+      })
+    end
+  end
+end
+
+local function install_provider(namespace)
+  if installed_providers[namespace] then return end
+  vim.api.nvim_set_decoration_provider(namespace, {
+    on_win = function(_, win, buf, top, bottom)
+      return draw_window(namespace, win, buf, top, bottom)
+    end,
+  })
+  installed_providers[namespace] = true
 end
 
 function M.supports(buf, win)
@@ -226,63 +215,45 @@ function M.supports(buf, win)
 end
 
 function M.start(ctx)
-  if not M.supports(ctx.target_buf, ctx.target_win) then
-    return false
-  end
+  if not M.supports(ctx.target_buf, ctx.target_win) then return false end
   local mirror = state(ctx)
   mirror.namespace = mirror.namespace or vim.api.nvim_create_namespace(namespace_name)
   vim.api.nvim_set_hl(0, "GhostReaderMirror", { link = "Comment", default = true })
-  vim.api.nvim_set_hl(0, "GhostReaderMirrorActive", { link = "CursorLine", default = true })
-  mirror.touched_buffers[ctx.target_buf] = true
+  install_provider(mirror.namespace)
   return true
 end
 
 function M.render(ctx, frame)
+  if not M.supports(ctx.target_buf, ctx.target_win) then return false end
   local mirror = state(ctx)
-  if not mirror.namespace and not M.start(ctx) then
-    return false
-  end
-  if not M.supports(ctx.target_buf, ctx.target_win) then
-    return false
-  end
+  if not mirror.namespace and not M.start(ctx) then return false end
+  local opts, priority = mirror_config(ctx)
+  local slots = ensure_slots(ctx)
+  capture_view(ctx, mirror)
 
-  for buf in pairs(mirror.touched_buffers) do
-    clear_buffer(mirror, buf)
-  end
-  mirror.touched_buffers[ctx.target_buf] = true
-
-  local blocks = visible_lines(ctx, frame)
-  local current_key = block_key(blocks[1]) or position_key(frame and frame.position)
-  local previous_rows = mirror.rendered_rows
-  local previous_row = current_key and mirror.rendered_by_key and mirror.rendered_by_key[current_key]
-  local rows = previous_row and previous_rows and #previous_rows >= #blocks and previous_rows or anchor_rows(ctx, #blocks)
-  local rendered_blocks = {}
-  mirror.mark_ids = {}
-  for i = 1, math.min(#blocks, #rows) do
-    local block = blocks[i]
-    local row = rows[i]
-    local text = render_text(ctx, block.text)
-    local mark = vim.api.nvim_buf_set_extmark(ctx.target_buf, mirror.namespace, row - 1, 0, {
-      virt_text = {{text, block.active and "GhostReaderMirrorActive" or "GhostReaderMirror"}},
-      virt_text_pos = "overlay",
-      virt_text_hide = true,
-      priority = 90,
-    })
-    rendered_blocks[i] = block
-    mirror.mark_ids[i] = mark
-  end
-
-  mirror.rendered_rows = rows
-  mirror.reader_rows = rows
-  mirror.rendered_blocks = rendered_blocks
-  mirror.rendered_by_key = {}
-  for i, block in ipairs(rendered_blocks) do
-    local key = block_key(block)
-    if key then
-      mirror.rendered_by_key[key] = rows[i]
+  local active_key = position_key(frame and frame.position)
+  if not active_key then
+    for _, block in ipairs((frame and frame.blocks) or {}) do
+      if block.active then
+        active_key = block_key(block)
+        break
+      end
     end
   end
-  activate(ctx, previous_row or rows[1])
+  local anchor = active_key and mirror.rendered_by_key and mirror.rendered_by_key[active_key]
+  if not anchor then
+    prepare_rows(ctx, (frame and frame.blocks) or {}, slots)
+    active_key = active_key or block_key((frame and frame.blocks or {})[1])
+    anchor = active_key and mirror.rendered_by_key[active_key] or mirror.reader_rows[1]
+  end
+
+  mirror.target_win = ctx.target_win
+  mirror.target_buf = ctx.target_buf
+  mirror.priority = priority
+  mirror.visible = true
+  provider_registry[mirror.namespace] = mirror
+  request_redraw()
+  activate(ctx, mirror, anchor)
   return true
 end
 
@@ -291,7 +262,11 @@ function M.reader_buf(ctx)
 end
 
 function M.hide(ctx)
-  clear_marks(ctx)
+  local mirror = state(ctx)
+  mirror.visible = false
+  if mirror.namespace then provider_registry[mirror.namespace] = mirror end
+  request_redraw()
+  restore_view(ctx, mirror)
   return true
 end
 
@@ -301,39 +276,47 @@ end
 
 function M.stop(ctx)
   local mirror = state(ctx)
-  for buf in pairs(mirror.touched_buffers) do
-    clear_buffer(mirror, buf)
-  end
+  mirror.visible = false
+  if mirror.namespace then provider_registry[mirror.namespace] = nil end
+  request_redraw()
+  restore_view(ctx, mirror)
   mirror.namespace = nil
-  mirror.touched_buffers = {}
-  mirror.rendered_rows = nil
-  mirror.reader_rows = nil
-  mirror.rendered_blocks = nil
+  mirror.slots = nil
+  mirror.layout_signature = nil
+  mirror.prepared_by_row = nil
   mirror.rendered_by_key = nil
-  mirror.mark_ids = nil
+  mirror.reader_rows = nil
   mirror.active_row = nil
+  mirror.target_win = nil
+  mirror.target_buf = nil
+  mirror.priority = nil
   return true
 end
 
 function M.page_size(ctx)
-  local _, style_config, fallback = buffer_style_config(ctx)
-  local limit = style_config.visible_lines or fallback
   if not M.supports(ctx.target_buf, ctx.target_win) then
-    return limit
+    local opts = mirror_config(ctx)
+    return opts.max_total_blocks or 1
   end
-  return math.max(1, math.min(limit, vim.api.nvim_win_get_height(ctx.target_win), vim.api.nvim_buf_line_count(ctx.target_buf)))
+  return #ensure_slots(ctx)
 end
 
 function M.segment_count(ctx, text)
-  local prefix, suffix = comment_parts(vim.bo[ctx.target_buf].filetype)
-  local width = math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - display_width(prefix) - display_width(suffix) - 2)
-  return #utils.wrap_display(text or "", width)
+  local opts = mirror_config(ctx)
+  local lines = wrapped_lines(ctx, text)
+  return math.max(1, math.ceil(#lines / math.max(1, opts.max_lines_per_block or 1)))
 end
 
 function M.segment_text(ctx, text, index)
-  local prefix, suffix = comment_parts(vim.bo[ctx.target_buf].filetype)
-  local width = math.max(20, vim.api.nvim_win_get_width(ctx.target_win) - display_width(prefix) - display_width(suffix) - 2)
-  return utils.wrap_display(text or "", width)[index]
+  local opts = mirror_config(ctx)
+  local per_block = math.max(1, opts.max_lines_per_block or 1)
+  local lines = wrapped_lines(ctx, text)
+  local first = ((index or 1) - 1) * per_block + 1
+  local result = {}
+  for current = first, math.min(first + per_block - 1, #lines) do
+    result[#result + 1] = lines[current]
+  end
+  return result
 end
 
 return M

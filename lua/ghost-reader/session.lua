@@ -287,18 +287,6 @@ local function setup_autocmds()
     callback = schedule_reflow,
   })
 
-  if vim.fn.exists("##FoldClosed") == 1 and vim.fn.exists("##FoldOpened") == 1 then
-    vim.api.nvim_create_autocmd({ "FoldClosed", "FoldOpened" }, {
-      group = active.autocmd_group,
-      callback = function()
-        if is_current_session() and active.mode == "mirror" and active.renderer.invalidate_layout then
-          pcall(active.renderer.invalidate_layout, active.ctx)
-        end
-        schedule_reflow()
-      end,
-    })
-  end
-
   vim.api.nvim_create_autocmd("OptionSet", {
     group = active.autocmd_group,
     pattern = { "cmdheight", "laststatus" },
@@ -362,6 +350,26 @@ local function open_book(path, mode)
     target_win = target_win,
     generation = state.generation + 1,
   }
+
+  ctx_obj.on_fold_change = function()
+    if active ~= tentative or tentative.generation ~= state.generation
+      or tentative.transitioning or tentative.visibility ~= "VISIBLE" or tentative.mode ~= "mirror" then
+      return
+    end
+    if tentative.renderer.invalidate_layout then
+      pcall(tentative.renderer.invalidate_layout, tentative.ctx)
+    end
+    local ok, rendered = pcall(render_current)
+    if not ok or rendered == false then
+      if tentative.renderer.hide then
+        pcall(tentative.renderer.hide, tentative.ctx)
+      end
+      keymaps.detach(tentative)
+      tentative.visibility = "HARD_HIDDEN"
+      tentative.hidden_policy = "hard"
+      tentative.insert_suspended = false
+    end
+  end
 
   local saved = progress.load(book, cfg)
   if saved and saved.position then

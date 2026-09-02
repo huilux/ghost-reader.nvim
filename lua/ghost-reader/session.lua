@@ -79,7 +79,6 @@ local function frame_for(pos)
     path = active.book.path,
     position = clone(pos),
     blocks = blocks,
-    visible_blocks = active.config.reader.visible_blocks,
     page_size = page_size,
   }
 end
@@ -128,7 +127,6 @@ local function setup_autocmds()
   end
   active.autocmd_group = vim.api.nvim_create_augroup("ghost-reader-session-" .. active.generation, { clear = true })
 
-  local target_buf = active.target_buf
   local generation = active.generation
 
   local function is_current_session()
@@ -148,38 +146,6 @@ local function setup_autocmds()
       end
     end)
   end
-
-  local function target_autocmd(events, callback)
-    vim.api.nvim_create_autocmd(events, {
-      group = active.autocmd_group,
-      buffer = target_buf,
-      callback = callback,
-    })
-  end
-
-  target_autocmd("InsertEnter", function()
-    if is_current_session() and active.mode == "overlay" and active.config.stealth.overlay.hide_on_insert then
-      M.hide("soft")
-    end
-  end)
-
-  target_autocmd("InsertLeave", function()
-    if is_current_session() and active.visibility == "SOFT_HIDDEN" and active.mode == "overlay" then
-      M.restore()
-    end
-  end)
-
-  target_autocmd("BufLeave", function()
-    if is_current_session() and active.visibility == "VISIBLE" and active.mode == "overlay" and active.config.stealth.overlay.hide_on_buf_leave then
-      M.hide("hard")
-    end
-  end)
-
-  target_autocmd("WinLeave", function()
-    if is_current_session() and active.visibility == "VISIBLE" and active.mode == "overlay" and active.config.stealth.overlay.hide_on_win_leave then
-      M.hide("hard")
-    end
-  end)
 
   vim.api.nvim_create_autocmd("BufLeave", {
     group = active.autocmd_group,
@@ -236,7 +202,7 @@ local function open_book(path, mode)
   end
 
   local previous = active
-  local requested_mode = mode or cfg.reader.renderer or "overlay"
+  local requested_mode = mode or cfg.reader.renderer or "mirror"
   local target_buf = vim.api.nvim_get_current_buf()
   local target_win = vim.api.nvim_get_current_win()
   local ctx_obj = {

@@ -32,7 +32,6 @@ local function make_context()
     target_buf = buf,
     target_win = win,
     config = {
-      reader = { visible_blocks = 3 },
       buffer = {
         style = "light",
         light = { visible_lines = 3, max_consecutive_lines = 3 },
@@ -40,7 +39,7 @@ local function make_context()
       },
     },
     view_state = {},
-    mode = "overlay",
+    mode = "mirror",
     view_name = "mirror",
   }
 end
@@ -89,7 +88,6 @@ local function make_two_window_context()
     target_win = current_win,
     peer_win = peer_win,
     config = {
-      reader = { visible_blocks = 3 },
       buffer = {
         style = "light",
         light = { visible_lines = 3, max_consecutive_lines = 3 },
@@ -97,7 +95,7 @@ local function make_two_window_context()
       },
     },
     view_state = {},
-    mode = "overlay",
+    mode = "mirror",
     view_name = "mirror",
   }
 end

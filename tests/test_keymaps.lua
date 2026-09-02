@@ -16,7 +16,7 @@ describe("keymaps", function()
   it("restores a pre-existing buffer mapping", function()
     local buf = helpers.new_normal_buffer({ "one" })
     vim.keymap.set("n", "j", "gj", { buffer = buf, desc = "user j" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), buf)
     assert.equal("Ghost Reader: next content", maparg_in_buf(buf, "j").desc)
     keymaps.detach(session)
@@ -27,7 +27,7 @@ describe("keymaps", function()
 
   it("deletes only plugin mappings when no previous map exists", function()
     local buf = helpers.new_normal_buffer({ "one" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), buf)
     keymaps.detach(session)
     assert.same({}, maparg_in_buf(buf, "j"))
@@ -42,17 +42,17 @@ describe("keymaps", function()
     assert.is_truthy(vim.fn.maparg("-", "n", false, true).rhs)
     keymaps.detach(statusline_session)
 
-    local overlay_session = { mode = "overlay" }
-    keymaps.attach(overlay_session, config.setup(), buf)
+    local mirror_session = { mode = "mirror" }
+    keymaps.attach(mirror_session, config.setup(), buf)
     assert.same({}, maparg_in_buf(buf, "a"))
     assert.same({}, maparg_in_buf(buf, "+"))
     assert.same({}, maparg_in_buf(buf, "-"))
-    keymaps.detach(overlay_session)
+    keymaps.detach(mirror_session)
   end)
 
   it("skips false bindings", function()
     local buf = helpers.new_normal_buffer({ "one" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup({ keymaps = { reader = { help = false } } }), buf)
     assert.same({}, maparg_in_buf(buf, "?"))
     keymaps.detach(session)
@@ -60,7 +60,7 @@ describe("keymaps", function()
 
   it("leaves escape and the old control-layer hide key untouched", function()
     local buf = helpers.new_normal_buffer({ "one" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), buf)
     assert.same({}, maparg_in_buf(buf, "<Esc>"))
     assert.same({}, maparg_in_buf(buf, "gh"))
@@ -71,7 +71,7 @@ describe("keymaps", function()
     local first = helpers.new_normal_buffer({ "one" })
     local second = vim.api.nvim_create_buf(true, false)
     vim.keymap.set("n", "j", "gj", { buffer = first, desc = "user j" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), first)
     vim.api.nvim_set_current_buf(second)
     keymaps.detach(session)
@@ -81,7 +81,7 @@ describe("keymaps", function()
 
   it("detaches safely after the mapped buffer was deleted", function()
     local buf = helpers.new_normal_buffer({ "one" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), buf)
     vim.api.nvim_buf_delete(buf, { force = true })
 

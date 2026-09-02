@@ -31,7 +31,7 @@ local function buffer_style_config(ctx)
   local buffer = ctx.config and ctx.config.buffer or {}
   local style = buffer.style or "light"
   local style_config = buffer[style] or {}
-  local fallback = ctx.config and ctx.config.reader and ctx.config.reader.visible_blocks or 3
+  local fallback = 3
   return style, style_config, fallback
 end
 
@@ -104,7 +104,7 @@ local function create_scratch_buffer(skeleton)
   return buf
 end
 
-local function visible_blocks(ctx, frame)
+local function visible_lines(ctx, frame)
   local blocks = frame and frame.blocks or {}
   local _, style_config, fallback = buffer_style_config(ctx)
   local limit = style_config.visible_lines or fallback
@@ -179,7 +179,7 @@ local function build_lines(ctx, frame)
   local mirror = state(ctx)
   local skeleton = mirror.skeleton or {}
   local lines = vim.deepcopy(skeleton.lines or {})
-  local blocks = visible_blocks(ctx, frame)
+  local blocks = visible_lines(ctx, frame)
   if #lines == 0 then
     lines = { "" }
   end
@@ -280,7 +280,7 @@ function M.render(ctx, frame)
       return false
     end
   end
-  local blocks = visible_blocks(ctx, frame)
+  local blocks = visible_lines(ctx, frame)
   local current_key = block_key(blocks[1]) or position_key(frame and frame.position)
   if current_key and mirror.rendered_by_key and mirror.rendered_by_key[current_key] then
     return activate(ctx, mirror.rendered_by_key[current_key])

@@ -2,9 +2,7 @@ local M = {}
 
 local defaults = {
   reader = {
-    renderer = "overlay",
-    visible_blocks = 3,
-    mirror_fallback = true,
+    renderer = "mirror",
   },
   buffer = {
     style = "light",
@@ -26,11 +24,6 @@ local defaults = {
   stealth = {
     hide_on_focus_lost = true,
     silent = true,
-    overlay = {
-      hide_on_insert = true,
-      hide_on_buf_leave = true,
-      hide_on_win_leave = true,
-    },
   },
   paths = {},
   keymaps = {
@@ -88,8 +81,8 @@ local function validate_value(value, expected, path)
   end
 
   if expected == "renderer" then
-    if value ~= "overlay" and value ~= "mirror" then
-      error("invalid config value at " .. path .. ": expected overlay or mirror")
+    if value ~= "mirror" and value ~= "statusline" then
+      error("invalid config value at " .. path .. ": expected mirror or statusline")
     end
     return
   end
@@ -141,12 +134,6 @@ local function validate_schema(user_config)
   local reader = user_config.reader or {}
   if reader.renderer ~= nil then
     validate_value(reader.renderer, "renderer", "reader.renderer")
-  end
-  if reader.visible_blocks ~= nil then
-    validate_value(reader.visible_blocks, "positive_integer", "reader.visible_blocks")
-  end
-  if reader.mirror_fallback ~= nil then
-    validate_value(reader.mirror_fallback, "boolean", "reader.mirror_fallback")
   end
 
   if user_config.buffer ~= nil and type(user_config.buffer) ~= "table" then
@@ -200,20 +187,6 @@ local function validate_schema(user_config)
   if stealth.silent ~= nil then
     validate_value(stealth.silent, "boolean", "stealth.silent")
   end
-  if stealth.overlay ~= nil and type(stealth.overlay) ~= "table" then
-    error("invalid config value at stealth.overlay: expected table")
-  end
-  local overlay = stealth.overlay or {}
-  if overlay.hide_on_insert ~= nil then
-    validate_value(overlay.hide_on_insert, "boolean", "stealth.overlay.hide_on_insert")
-  end
-  if overlay.hide_on_buf_leave ~= nil then
-    validate_value(overlay.hide_on_buf_leave, "boolean", "stealth.overlay.hide_on_buf_leave")
-  end
-  if overlay.hide_on_win_leave ~= nil then
-    validate_value(overlay.hide_on_win_leave, "boolean", "stealth.overlay.hide_on_win_leave")
-  end
-
   if user_config.paths ~= nil and type(user_config.paths) ~= "table" then
     error("invalid config value at paths: expected table")
   end

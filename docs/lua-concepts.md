@@ -34,8 +34,7 @@ local mix = { "first", key = "value", [10] = "tenth" }
 -- 嵌套表
 local nested = {
   reader = {
-    renderer = "overlay",
-    visible_blocks = 3,
+    renderer = "mirror",
   },
   keymaps = {
     global = {
@@ -344,8 +343,7 @@ lua/ghost-reader/init.lua        ← 主模块：setup()、open()、open_statusl
         │
         ├── renderer/            ← 内容渲染
         │   ├── init.lua         ← 调度器
-        │   ├── overlay.lua      ← 真实 buffer 上的虚拟行覆盖
-        │   ├── mirror.lua       ← buffer 伪装回退（light/strong）
+        │   ├── mirror.lua       ← buffer 伪装阅读（light/strong）
         │   └── statusline.lua    ← 状态栏浮窗
         │
 ```

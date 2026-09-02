@@ -2,11 +2,10 @@
 
 Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像正常写代码一样看书。
 
-这个插件有三个可选阅读模式：
+这个插件有两个可选阅读模式：
 
-- overlay 是默认模式，使用真实 buffer 上的 extmark 虚拟行显示内容，不改写文件内容、文件名、`modified` 状态或 undo 历史。
+- mirror 是默认的 buffer 阅读模式，使用匿名 scratch buffer 伪装成代码文件。
 - statusline 是原生状态栏上方的一行浮窗，一次显示一段文本。
-- 当 overlay 不能直接接管目标窗口时，插件会自动回退到 buffer（内部 renderer 名称为 mirror）。
 
 视觉上的伪装只是界面层面的效果，不是安全边界。
 
@@ -23,7 +22,7 @@ Neovim 隐匿式电子书阅读器，支持 EPUB/TXT/Markdown，在终端里像�
 | `<leader>rt` | 打开目录             |
 | `<leader>rq` | 关闭当前会话         |
 
-以下映射在阅读可见时生效，overlay、buffer 和 statusline 使用同一组语义。没有配置成阅读键的按键仍保留 Neovim 原生行为：
+以下映射在阅读可见时生效，mirror 和 statusline 使用同一组语义。没有配置成阅读键的按键仍保留 Neovim 原生行为：
 
 | 快捷键  | 功能         |
 | ------- | ------------ |
@@ -62,7 +61,7 @@ return {
 }
 ```
 
-这里的 `keys` 属于 lazy.nvim，只负责在插件尚未加载时提供统一入口。每次按 `<leader>rr` 都会依次选择书籍和 `overlay`/`statusline`/`mirror` 模式；当 overlay 无法接管时会按 `buffer` 配置回退。重复打开会安全替换当前会话。插件加载后，其他全局快捷键和阅读键由 Ghost Reader 注册，不需要在 `keys` 和 `opts.keymaps` 中重复配置。
+这里的 `keys` 属于 lazy.nvim，只负责在插件尚未加载时提供统一入口。每次按 `<leader>rr` 都会依次选择书籍和 `mirror`/`statusline` 模式；重复打开会安全替换当前会话。插件加载后，其他全局快捷键和阅读键由 Ghost Reader 注册，不需要在 `keys` 和 `opts.keymaps` 中重复配置。
 
 ## 命令
 
@@ -76,12 +75,6 @@ return {
 
 ## 阅读模式
 
-overlay：
-
-- 默认模式。
-- 用 extmark 和 `virt_lines` 把内容画到真实 buffer 上方。
-- 适合最像“正常编辑”的伪装方式。
-
 statusline：
 
 - 位于 Vim/lualine 原生状态栏上方，不遮挡原生状态信息。
@@ -89,9 +82,9 @@ statusline：
 - 长文本会按窗口宽度切段显示。
 - 阅读可见时，阅读映射会跟随当前 buffer。
 
-buffer（内部 `mirror`）：
+mirror：
 
-- overlay 受限时的自动回退，也可以通过 `reader.renderer = "mirror"` 使用。
+- 默认的 buffer 阅读模式。
 - 使用匿名 scratch buffer 作为稳定替身，原代码 buffer 不会被改写。
 - 书籍内容以当前语言的注释形式显示，支持 `light` 和 `strong` 两种伪装样式。
 - `j/k` 会把光标跳到下一条/上一条阅读行，强伪装会自动跳过代码骨架。
@@ -99,16 +92,9 @@ buffer（内部 `mirror`）：
 
 ## Stealth 事件
 
-当 `stealth` 选项开启时，插件会根据环境自动隐藏或恢复当前会话。常见的自动隐藏来源包括：
-
-- 切换到插入模式；
-- 离开当前 buffer；
-- 离开当前窗口；
-- 失去焦点。
+当 `stealth.hide_on_focus_lost` 开启时，编辑器失去焦点会自动硬隐藏当前会话。
 
 `<Esc><Esc>` 会在显示与硬隐藏之间切换。硬隐藏会恢复被接管的原始映射；恢复后阅读映射立即重新生效。单击 `<Esc>` 保留 Neovim 的原生行为。statusline 可见时切换 buffer 或窗口，旧 buffer 会恢复原映射，新 buffer 会接管阅读键，浮窗和自动翻页保持运行。
-
-overlay 在进入插入模式时仍使用软隐藏：阅读内容暂时消失，但插入模式可正常编码；离开插入模式后自动恢复。失去焦点或离开目标 buffer/window 引发的硬隐藏则会恢复阅读键。
 
 ## 配置
 
@@ -116,24 +102,21 @@ overlay 在进入插入模式时仍使用软隐藏：阅读内容暂时消失，
 
 ```lua
 require("ghost-reader").setup({
-    reader = {
-    reader = {
-      renderer = "overlay",
-      visible_blocks = 3,
-      mirror_fallback = true,
+  reader = {
+    renderer = "mirror",
+  },
+  buffer = {
+    style = "light", -- "light" 或 "strong"
+    preset = "random",
+    light = {
+      visible_lines = 6,
+      max_consecutive_lines = 6,
     },
-    buffer = {
-      style = "light", -- "light" 或 "strong"
-      preset = "random",
-      light = {
-        visible_lines = 6,
-        max_consecutive_lines = 6,
-      },
-      strong = {
-        visible_lines = 3,
-        max_consecutive_lines = 1,
-      },
+    strong = {
+      visible_lines = 3,
+      max_consecutive_lines = 1,
     },
+  },
   statusline = {
     interval = 3000,
     autoplay = true,
@@ -142,11 +125,6 @@ require("ghost-reader").setup({
   stealth = {
     hide_on_focus_lost = true,
     silent = true,
-    overlay = {
-      hide_on_insert = true,
-      hide_on_buf_leave = true,
-      hide_on_win_leave = true,
-    },
   },
   paths = {
     cache_dir = vim.fn.stdpath("cache") .. "/ghost-reader/",
@@ -190,5 +168,4 @@ require("ghost-reader").setup({
 ## 排查
 
 - 如果 `:GhostReaderStatusline` 没有弹出浮窗，先确认当前窗口没有被其他插件强制改写。
-- 如果 overlay 不工作，插件会自动回退到 mirror。
-- 如果你看不到任何内容，检查 `visible_blocks`、窗口宽度，以及当前文件是否真的可读。
+- 如果 mirror 中看不到内容，检查当前样式的 `visible_lines`、窗口宽度，以及当前文件是否真的可读。

@@ -182,7 +182,7 @@ describe("public api", function()
     vim.ui.select = function(items, opts, on_choice)
       prompts[#prompts + 1] = opts.prompt
       if opts.prompt == "Select mode:" then
-        on_choice("overlay", 1)
+        on_choice("mirror", 1)
       else
         on_choice(items[1], 1)
       end
@@ -202,12 +202,12 @@ describe("public api", function()
 
     assert.same({ "Select book:", "Select mode:", "Select book:" }, prompts)
     assert.same({
-      { path = "/tmp/book-a.txt", mode = "overlay" },
+      { path = "/tmp/book-a.txt", mode = "mirror" },
       { path = "/tmp/book-a.txt", mode = "statusline" },
     }, opened)
   end)
 
-  it("offers buffer mode alongside overlay and statusline", function()
+  it("offers only mirror and statusline modes", function()
     local modes = nil
     package.loaded["ghost-reader.session"] = {
       get = function() return nil end,
@@ -227,7 +227,7 @@ describe("public api", function()
     vim.ui.select = function(items, opts, on_choice)
       if opts.prompt == "Select mode:" then
         modes = items
-        on_choice("mirror", 3)
+        on_choice("mirror", 1)
       else
         on_choice(items[1], 1)
       end
@@ -238,7 +238,7 @@ describe("public api", function()
     reader.select_book()
     vim.ui.select = original_select
 
-    assert.same({ "overlay", "statusline", "mirror" }, modes)
+    assert.same({ "mirror", "statusline" }, modes)
   end)
 
   it("asks for a mode for explicit paths while statusline direct-open bypasses the picker", function()
@@ -298,12 +298,12 @@ describe("public api", function()
     package.loaded["ghost-reader.keymaps"] = { setup = function() end }
     package.loaded["ghost-reader.actions"] = {}
 
-    local mode = "overlay"
+    local mode = "mirror"
     local original_select = vim.ui.select
     vim.ui.select = function(items, opts, on_choice)
       prompts[#prompts + 1] = opts.prompt
       if opts.prompt == "Select mode:" then
-        on_choice(mode, mode == "overlay" and 1 or 2)
+        on_choice(mode, mode == "mirror" and 1 or 2)
       else
         on_choice(items[1], 1)
       end
@@ -318,7 +318,7 @@ describe("public api", function()
     vim.ui.select = original_select
     assert.same({ "Select book:", "Select mode:", "Select book:", "Select mode:" }, prompts)
     assert.same({
-      { path = "/tmp/book-a.txt", mode = "overlay" },
+      { path = "/tmp/book-a.txt", mode = "mirror" },
       { path = "/tmp/book-a.txt", mode = "statusline" },
     }, opened)
   end)

@@ -1,7 +1,7 @@
 describe("renderer.init", function()
-  it("exposes overlay, mirror, and statusline adapters", function()
+  it("exposes only mirror and statusline adapters", function()
     local renderer = require("ghost-reader.renderer")
-    assert.is_table(renderer.overlay)
+    assert.is_nil(renderer.overlay)
     assert.is_table(renderer.mirror)
     assert.is_table(renderer.statusline)
     assert.is_function(renderer.create)
@@ -14,13 +14,11 @@ describe("renderer.init", function()
     end, "unknown reader view: bogus")
   end)
 
-  it("calls renderer.start and propagates failures", function()
-    package.loaded["ghost-reader.renderer.overlay"] = nil
+  it("uses mirror by default and propagates start failures", function()
     package.loaded["ghost-reader.renderer.mirror"] = nil
     local started = 0
     local render_calls = 0
-    package.loaded["ghost-reader.renderer.overlay"] = {
-      supports = function() return true end,
+    package.loaded["ghost-reader.renderer.mirror"] = {
       start = function() started = started + 1; return true end,
       render = function() render_calls = render_calls + 1; return true end,
       hide = function() return true end,
@@ -35,26 +33,20 @@ describe("renderer.init", function()
     local ctx = {
       target_buf = vim.api.nvim_get_current_buf(),
       target_win = vim.api.nvim_get_current_win(),
-      config = { reader = { mirror_fallback = true } },
+      config = { reader = { renderer = "mirror" } },
       view_state = {},
-      mode = "overlay",
-      view_name = "overlay",
+      mode = nil,
+      view_name = nil,
     }
-    package.loaded["ghost-reader.renderer.mirror"] = {
-      start = function() started = started + 10; return false end,
-      render = function() render_calls = render_calls + 10; return true end,
-      hide = function() return true end,
-      restore = function() return true end,
-      stop = function() return true end,
-      page_size = function() return 1 end,
-      segment_count = function() return 1 end,
-      segment_text = function(_, text) return text end,
-    }
-    assert.is_truthy(renderer.create(ctx, "overlay"))
-    assert.is_true(started > 0)
-    local adapter = renderer.create(ctx, "overlay")
+    local adapter = renderer.create(ctx)
+    assert.equal("mirror", ctx.mode)
+    assert.equal("mirror", ctx.view_name)
+    assert.equal(1, started)
     assert.is_function(adapter.render)
     assert.is_true(adapter.render(ctx, { blocks = { { text = "x", active = true } } }))
-    assert.is_true(render_calls > 0)
+    assert.equal(1, render_calls)
+
+    package.loaded["ghost-reader.renderer.mirror"].start = function() return false end
+    assert.is_nil(renderer.create(ctx, "mirror"))
   end)
 end)

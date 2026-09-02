@@ -5,54 +5,6 @@ describe("session integration", function()
     helpers.reset_modules()
   end)
 
-  it("falls back to mirror when overlay is unsupported", function()
-    package.loaded["ghost-reader.renderer.overlay"] = {
-      supports = function()
-        return false
-      end,
-      start = function()
-        return false
-      end,
-      render = function()
-        return true
-      end,
-      hide = function()
-        return true
-      end,
-      restore = function()
-        return true
-      end,
-      stop = function()
-        return true
-      end,
-      page_size = function()
-        return 3
-      end,
-      segment_count = function()
-        return 1
-      end,
-      segment_text = function(_, text)
-        return text
-      end,
-    }
-
-    local session = require("ghost-reader.session")
-    local root = vim.fn.tempname()
-    local cfg = require("ghost-reader.config").setup({
-      reader = { renderer = "overlay" },
-      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
-    })
-    local book_path = vim.fn.tempname() .. ".txt"
-    vim.fn.writefile({ "chapter 1" }, book_path)
-
-    session.configure(cfg)
-    assert.is_true(session.start(book_path, "overlay"))
-    assert.equal("mirror", session.get().view_name)
-    assert.equal(session.get().ctx.view_state.mirror.buf, session.get().reader_buf)
-    assert.equal("overlay", session.get().mode)
-    session.stop()
-  end)
-
   it("moves mirror cursor between reading rows and refreshes at page boundaries", function()
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)
@@ -121,7 +73,6 @@ describe("session integration", function()
     local session = require("ghost-reader.session")
     local root = vim.fn.tempname()
     local cfg = require("ghost-reader.config").setup({
-      reader = { visible_blocks = 1 },
       buffer = {
         light = { visible_lines = 1, max_consecutive_lines = 1 },
       },
@@ -131,7 +82,7 @@ describe("session integration", function()
     vim.fn.writefile({ "placeholder" }, book_path)
 
     session.configure(cfg)
-    assert.is_true(session.start(book_path, "overlay"))
+    assert.is_true(session.start(book_path, "mirror"))
     assert.is_table(session.get())
     assert.is_true(session.dispatch("next_page"))
     assert.is_true(session.dispatch("next_chapter"))
@@ -174,36 +125,10 @@ describe("session integration", function()
     local book_path = vim.fn.tempname() .. ".txt"
     vim.fn.writefile({ "placeholder" }, book_path)
     session.configure(cfg)
-    assert.is_true(session.start(book_path, "overlay"))
+    assert.is_true(session.start(book_path, "mirror"))
     session.toc()
     assert.is_not_nil(selected)
     assert.equal(1, session.get().position.chapter_index)
-    session.stop()
-  end)
-
-  it("applies overlay autocmd soft and hard hide transitions", function()
-    local code_buf = vim.api.nvim_create_buf(false, false)
-    vim.bo[code_buf].swapfile = false
-    vim.api.nvim_buf_set_name(code_buf, vim.fn.tempname() .. ".lua")
-    vim.api.nvim_buf_set_lines(code_buf, 0, -1, false, { "local value = 1" })
-    vim.bo[code_buf].filetype = "lua"
-    vim.api.nvim_set_current_buf(code_buf)
-    local session = require("ghost-reader.session")
-    local root = vim.fn.tempname()
-    local cfg = require("ghost-reader.config").setup({
-      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
-    })
-    local book_path = vim.fn.tempname() .. ".txt"
-    vim.fn.writefile({ "placeholder" }, book_path)
-
-    session.configure(cfg)
-    assert.is_true(session.start(book_path, "overlay"))
-    vim.api.nvim_exec_autocmds("InsertEnter", {})
-    assert.equal("SOFT_HIDDEN", session.get().visibility)
-    vim.api.nvim_exec_autocmds("InsertLeave", {})
-    assert.equal("VISIBLE", session.get().visibility)
-    vim.api.nvim_exec_autocmds("FocusLost", {})
-    assert.equal("HARD_HIDDEN", session.get().visibility)
     session.stop()
   end)
 
@@ -218,7 +143,7 @@ describe("session integration", function()
     vim.fn.writefile({ "placeholder" }, book_path)
 
     session.configure(cfg)
-    assert.is_true(session.start(book_path, "overlay"))
+    assert.is_true(session.start(book_path, "mirror"))
     assert.equal("mirror", session.get().view_name)
     assert.is_true(session.hide("hard"))
     assert.equal("HARD_HIDDEN", session.get().visibility)
@@ -262,47 +187,4 @@ describe("session integration", function()
     session.stop()
   end)
 
-  it("triggers target-scoped autocmds on the current buffer only", function()
-    local root = vim.fn.tempname()
-    local cfg = require("ghost-reader.config").setup({
-      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
-    })
-    local first = helpers.new_normal_buffer({ "one" })
-    local second = helpers.new_normal_buffer({ "two" })
-    vim.api.nvim_set_current_buf(first)
-    package.loaded["ghost-reader.renderer.overlay"] = {
-      supports = function() return true end,
-      start = function() return true end,
-      render = function() return true end,
-      hide = function() return true end,
-      restore = function() return true end,
-      stop = function() return true end,
-      page_size = function() return 1 end,
-      segment_count = function() return 1 end,
-      segment_text = function(_, text) return text end,
-    }
-    package.loaded["ghost-reader.bookshelf"] = {
-      open = function(path)
-        return {
-          path = path,
-          format = "txt",
-          chapters = { { title = "One", lines = { "a", "b" } } },
-          toc = { { title = "One", index = 1 } },
-        }
-      end,
-    }
-    package.loaded["ghost-reader.renderer"] = nil
-    package.loaded["ghost-reader.session"] = nil
-    local session = require("ghost-reader.session")
-
-    session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
-    vim.api.nvim_exec_autocmds("BufLeave", { buffer = second })
-    assert.equal("VISIBLE", session.get().visibility)
-    vim.api.nvim_exec_autocmds("WinLeave", { buffer = second })
-    assert.equal("VISIBLE", session.get().visibility)
-    vim.api.nvim_exec_autocmds("BufLeave", { buffer = first })
-    assert.equal("HARD_HIDDEN", session.get().visibility)
-    session.stop()
-  end)
 end)

@@ -34,10 +34,10 @@ describe("session", function()
     }
 
     assert.same(cfg, session.configure(cfg))
-    assert.is_true(session.start(book_path, "overlay"))
+    assert.is_true(session.start(book_path, "mirror"))
     assert.equal("ACTIVE", session.state.lifecycle)
     assert.equal("VISIBLE", session.state.visibility)
-    assert.equal("overlay", session.state.mode)
+    assert.equal("mirror", session.state.mode)
     assert.is_nil(session.state.controls)
 
     assert.is_true(session.hide("soft"))
@@ -92,7 +92,7 @@ describe("session", function()
     })
 
     session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
     assert.is_true(session.hide("soft"))
     assert.equal(1, hide_calls)
     assert.equal(0, restore_calls)
@@ -126,9 +126,9 @@ describe("session", function()
     vim.fn.writefile({ "alpha" }, good_path)
 
     session.configure(cfg)
-    assert.is_true(session.start(good_path, "overlay"))
+    assert.is_true(session.start(good_path, "mirror"))
     local before = session.get()
-    assert.is_false(session.start(bad_path, "overlay"))
+    assert.is_false(session.start(bad_path, "mirror"))
     assert.equal(before, session.get())
     assert.equal(before.generation, session.get().generation)
     session.stop()
@@ -161,7 +161,7 @@ describe("session", function()
     vim.fn.writefile({ "alpha" }, good_path)
 
     session.configure(cfg)
-    assert.is_false(session.start(good_path, "overlay"))
+    assert.is_false(session.start(good_path, "mirror"))
     assert.equal(1, create_calls)
     assert.is_nil(session.get())
   end)
@@ -206,9 +206,9 @@ describe("session", function()
     vim.fn.writefile({ "beta" }, second)
 
     session.configure(cfg)
-    assert.is_true(session.start(first, "overlay"))
+    assert.is_true(session.start(first, "mirror"))
     local before = session.get()
-    assert.is_false(session.start(second, "overlay"))
+    assert.is_false(session.start(second, "mirror"))
     assert.equal(before, session.get())
     assert.equal(before.generation, session.get().generation)
     assert.is_true(render_calls > 0)
@@ -248,7 +248,7 @@ describe("session", function()
       paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
     }))
 
-    assert.is_true(session.start("/tmp/first.txt", "overlay"))
+    assert.is_true(session.start("/tmp/first.txt", "mirror"))
     local first = session.get()
     assert.is_true(session.start("/tmp/second.txt", "statusline"))
     assert.equal(first.generation + 1, session.get().generation)
@@ -287,7 +287,7 @@ describe("session", function()
     vim.fn.writefile({ "alpha" }, good_path)
 
     session.configure(cfg)
-    assert.is_true(session.start(good_path, "overlay"))
+    assert.is_true(session.start(good_path, "mirror"))
     assert.same({ good_path }, history_calls)
     session.stop()
   end)
@@ -317,7 +317,7 @@ describe("session", function()
     })
 
     session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
     vim.api.nvim_exec_autocmds("QuitPre", { buffer = vim.api.nvim_get_current_buf() })
     assert.equal(1, saves)
   end)
@@ -345,56 +345,12 @@ describe("session", function()
     })
 
     session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
     assert.is_nil(session.get().controls)
     assert.is_true(session.hide("hard"))
     assert.same({ "attach", "detach" }, events)
     assert.is_true(session.restore())
     assert.same({ "attach", "detach", "attach" }, events)
-    session.stop()
-  end)
-
-  it("hides on winleave and not on bufleave when configured that way", function()
-    local events = {}
-    package.loaded["ghost-reader.bookshelf"] = {
-      open = function(path)
-        return {
-          path = path,
-          format = "txt",
-          chapters = { { title = "One", lines = { "a", "b" } } },
-          toc = { { title = "One", index = 1 } },
-        }
-      end,
-    }
-    package.loaded["ghost-reader.renderer.overlay"] = {
-      supports = function() return true end,
-      start = function() return true end,
-      render = function() return true end,
-      hide = function() events[#events + 1] = "hide" end,
-      restore = function() return true end,
-      stop = function() return true end,
-      page_size = function() return 1 end,
-      segment_count = function() return 1 end,
-      segment_text = function(_, text) return text end,
-    }
-    local session = require("ghost-reader.session")
-    local root = vim.fn.tempname()
-    local cfg = require("ghost-reader.config").setup({
-      stealth = { overlay = { hide_on_buf_leave = false, hide_on_win_leave = true } },
-      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
-    })
-
-    local first = helpers.new_normal_buffer({ "one" })
-    local second = helpers.new_normal_buffer({ "two" })
-    vim.api.nvim_set_current_buf(first)
-
-    session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
-    vim.api.nvim_exec_autocmds("BufLeave", { buffer = first })
-    assert.equal("VISIBLE", session.get().visibility)
-    vim.api.nvim_exec_autocmds("WinLeave", { buffer = first })
-    assert.equal("HARD_HIDDEN", session.get().visibility)
-    assert.same({ "hide" }, events)
     session.stop()
   end)
 
@@ -498,8 +454,7 @@ describe("session", function()
         }
       end,
     }
-    package.loaded["ghost-reader.renderer.overlay"] = {
-      supports = function() return true end,
+    package.loaded["ghost-reader.renderer.mirror"] = {
       start = function() return true end,
       render = function() return true end,
       hide = function() return true end,
@@ -515,7 +470,7 @@ describe("session", function()
       paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
     })
     session.configure(cfg)
-    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "overlay"))
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
     assert.is_truthy(segment_calls.count > 0)
     assert.is_truthy(segment_calls.text > 0)
     session.stop()
@@ -529,7 +484,7 @@ describe("session", function()
     end
     local buf = helpers.new_normal_buffer({ "one" })
     vim.keymap.set("n", "j", "gj", { desc = "global user j" })
-    local session = { mode = "overlay" }
+    local session = { mode = "mirror" }
     keymaps.attach(session, config.setup(), buf)
     keymaps.detach(session)
     local global_map = vim.fn.maparg("j", "n", false, true)

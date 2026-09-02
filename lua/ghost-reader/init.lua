@@ -10,7 +10,7 @@ local function choose_mode(default_mode, on_choice, on_cancel)
   if default_mode then
     return on_choice(default_mode)
   end
-  vim.ui.select({ "overlay", "statusline", "mirror" }, { prompt = "Select mode:" }, function(choice)
+  vim.ui.select({ "mirror", "statusline" }, { prompt = "Select mode:" }, function(choice)
     if choice then
       on_choice(choice)
     elseif on_cancel then

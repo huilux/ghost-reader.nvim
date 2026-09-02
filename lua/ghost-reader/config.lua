@@ -202,6 +202,11 @@ local function validate_schema(user_config)
     validate_value(buffer.virt_text_priority, "positive_integer", "buffer.virt_text_priority")
   end
 
+  local effective_layout = vim.tbl_deep_extend("force", vim.deepcopy(defaults.buffer.layout), layout)
+  if effective_layout.max_lines_per_block + (effective_layout.edge_padding * 2) > effective_layout.region_lines then
+    error("invalid config value at buffer.layout.max_lines_per_block: does not fit region_lines after edge_padding")
+  end
+
   if user_config.statusline ~= nil and type(user_config.statusline) ~= "table" then
     error("invalid config value at statusline: expected table")
   end

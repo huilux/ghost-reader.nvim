@@ -101,6 +101,33 @@ local function make_two_window_context()
 end
 
 describe("renderer.mirror", function()
+  it("renders virtual text on the real target buffer", function()
+    local ctx = make_context()
+    local target = ctx.target_buf
+    local before = vim.api.nvim_buf_get_lines(target, 0, -1, false)
+    local name = vim.api.nvim_buf_get_name(target)
+
+    assert.is_true(mirror.start(ctx))
+    assert.is_true(mirror.render(ctx, {
+      blocks = {
+        { chapter_index = 1, line_index = 1, segment_index = 1, text = "first", active = true },
+        { chapter_index = 1, line_index = 2, segment_index = 1, text = "second", active = false },
+      },
+    }))
+
+    local state = ctx.view_state.mirror
+    assert.is_nil(state.buf)
+    assert.is_number(state.namespace)
+    assert.equal(target, vim.api.nvim_win_get_buf(ctx.target_win))
+    assert.same(before, vim.api.nvim_buf_get_lines(target, 0, -1, false))
+    assert.equal(name, vim.api.nvim_buf_get_name(target))
+    assert.is_false(vim.bo[target].modified)
+
+    local marks = vim.api.nvim_buf_get_extmarks(target, state.namespace, 0, -1, { details = true })
+    assert.is_truthy(#marks > 0)
+    assert.equal("overlay", marks[1][4].virt_text_pos)
+  end)
+
   it("keeps one skeleton and an unnamed scratch buffer", function()
     local ctx = make_context()
     assert.is_true(mirror.start(ctx))

@@ -15,3 +15,26 @@ describe("wrap_display", function()
     end
   end)
 end)
+
+describe("notify", function()
+  after_each(function()
+    utils.set_silent(false)
+  end)
+
+  it("suppresses messages while silent is enabled", function()
+    local messages = {}
+    local original_notify = vim.notify
+    vim.notify = function(msg) messages[#messages + 1] = msg end
+
+    utils.set_silent(true)
+    utils.notify("hidden message")
+    assert.equal(0, #messages)
+
+    utils.set_silent(false)
+    utils.notify("visible message")
+    assert.equal(1, #messages)
+    assert.is_truthy(messages[1]:find("visible message", 1, true))
+
+    vim.notify = original_notify
+  end)
+end)

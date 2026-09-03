@@ -40,6 +40,55 @@ local function set_state(new_state)
   end
 end
 
+local reader_help_entries = {
+  { key = "next_content", desc = "next content" },
+  { key = "prev_content", desc = "prev content" },
+  { key = "next_page", desc = "next page" },
+  { key = "prev_page", desc = "prev page" },
+  { key = "next_chapter", desc = "next chapter" },
+  { key = "prev_chapter", desc = "prev chapter" },
+  { key = "toc", desc = "table of contents" },
+  { key = "progress", desc = "progress" },
+  { key = "hide", desc = "hard hide" },
+  { key = "close", desc = "close session" },
+  { key = "help", desc = "help" },
+}
+
+local statusline_help_entries = {
+  { key = "toggle_auto", desc = "toggle auto" },
+  { key = "faster", desc = "faster" },
+  { key = "slower", desc = "slower" },
+}
+
+local function show_help()
+  local keymaps_cfg = active.config.keymaps or {}
+  local lines = { "[ghost-reader] " .. active.mode .. " mode keymaps" }
+  local function add_entries(title, entries, cfg_section)
+    local added = false
+    for _, entry in ipairs(entries) do
+      local lhs = cfg_section and cfg_section[entry.key]
+      if lhs then
+        if not added then
+          lines[#lines + 1] = title
+          added = true
+        end
+        lines[#lines + 1] = string.format("  %-12s %s", lhs, entry.desc)
+      end
+    end
+  end
+  add_entries("Global:", {
+    { key = "open", desc = "open book" },
+    { key = "hide", desc = "hard hide / restore" },
+    { key = "toc", desc = "table of contents" },
+    { key = "close", desc = "close session" },
+  }, keymaps_cfg.global)
+  add_entries("Reading:", reader_help_entries, keymaps_cfg.reader)
+  if active.mode == "statusline" then
+    add_entries("Statusline:", statusline_help_entries, keymaps_cfg.statusline)
+  end
+  utils.notify(table.concat(lines, "\n"))
+end
+
 local function segment_count(chapter_index, line_index)
   if not active or not active.renderer.segment_count then
     return 1
@@ -400,6 +449,7 @@ end
 
 function M.configure(cfg)
   default_config = cfg or default_config
+  utils.set_silent(default_config.stealth and default_config.stealth.silent == true)
   return default_config
 end
 
@@ -524,6 +574,9 @@ function M.dispatch(name)
     return M.toc()
   elseif name == "progress" then
     progress.show(active.book, active.position)
+    return true
+  elseif name == "help" then
+    show_help()
     return true
   elseif name == "toggle_auto" or name == "faster" or name == "slower" then
     if active.mode ~= "statusline" then

@@ -184,8 +184,18 @@ function M.safe_delete_buf(buf)
   end
 end
 
--- 插件通知（自动添加前缀，level 默认 INFO）
+-- 静默开关：stealth.silent 开启时抑制所有插件通知
+local silent = false
+
+function M.set_silent(flag)
+  silent = flag == true
+end
+
+-- 插件通知（自动添加前缀，level 默认 INFO，静默模式下不输出）
 function M.notify(msg, level)
+  if silent then
+    return
+  end
   vim.notify("[ghost-reader] " .. msg, level or vim.log.levels.INFO)
 end
 

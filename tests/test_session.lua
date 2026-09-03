@@ -395,6 +395,96 @@ describe("session", function()
     session.stop()
   end)
 
+  it("suppresses help notifications when stealth.silent is enabled", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a", "b" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer.mirror"] = {
+      supports = function() return true end,
+      start = function() return true end,
+      render = function() return true end,
+      hide = function() return true end,
+      restore = function() return true end,
+      stop = function() return true end,
+      page_size = function() return 1 end,
+      segment_count = function() return 1 end,
+      segment_text = function(_, text) return text end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+      stealth = { silent = true },
+    }))
+    helpers.new_normal_buffer({ "local value = true" }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+
+    local messages = {}
+    local original_notify = vim.notify
+    vim.notify = function(msg) messages[#messages + 1] = msg end
+    local ok = session.dispatch("help")
+    vim.notify = original_notify
+
+    assert.is_true(ok)
+    assert.equal(0, #messages)
+    session.stop()
+  end)
+
+  it("dispatches help to show keymap hints for the active mode", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = { { title = "One", lines = { "a", "b" } } },
+          toc = { { title = "One", index = 1 } },
+        }
+      end,
+    }
+    package.loaded["ghost-reader.renderer.mirror"] = {
+      supports = function() return true end,
+      start = function() return true end,
+      render = function() return true end,
+      hide = function() return true end,
+      restore = function() return true end,
+      stop = function() return true end,
+      page_size = function() return 1 end,
+      segment_count = function() return 1 end,
+      segment_text = function(_, text) return text end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({ "local value = true" }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+
+    local messages = {}
+    local original_notify = vim.notify
+    vim.notify = function(msg) messages[#messages + 1] = msg end
+    local ok = session.dispatch("help")
+    vim.notify = original_notify
+
+    assert.is_true(ok)
+    assert.equal(1, #messages)
+    local help = messages[1]
+    assert.is_truthy(help:match("j"))
+    assert.is_truthy(help:match("%?"))
+    assert.is_truthy(help:match("<Esc><Esc>"))
+    assert.is_falsy(help:match("toggle auto"))
+    session.stop()
+  end)
+
   it("rerenders a visible statusline after layout-affecting events", function()
     local renders = 0
     package.loaded["ghost-reader.bookshelf"] = {

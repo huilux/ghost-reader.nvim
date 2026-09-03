@@ -87,14 +87,14 @@ function M.show(book, position)
   local chapter_total = #(book.chapters or {})
   local chapter_line_total = #(book.chapters[position.chapter_index] and book.chapters[position.chapter_index].lines or {})
   local line = string.format(
-    "[ghost-reader] Chapter %d/%d · Line %d/%d · %d%%",
+    "Chapter %d/%d · Line %d/%d · %d%%",
     position.chapter_index,
     chapter_total,
     position.line_index,
     math.max(1, chapter_line_total),
     pct
   )
-  vim.notify(line, vim.log.levels.INFO)
+  utils.notify(line)
 end
 
 return M

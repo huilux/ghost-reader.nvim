@@ -31,7 +31,7 @@ local defaults = {
   },
   stealth = {
     hide_on_focus_lost = true,
-    silent = true,
+    silent = false,
   },
   paths = {},
   keymaps = {

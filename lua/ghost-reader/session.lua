@@ -554,6 +554,10 @@ function M.dispatch(name)
     return false
   end
   active.position = next_pos
+  if moved and (name == "next_chapter" or name == "prev_chapter")
+    and active.renderer.invalidate_content then
+    active.renderer.invalidate_content(active.ctx)
+  end
   render_current(name == "prev_content" and "backward" or nil)
   return moved
 end

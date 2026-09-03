@@ -128,6 +128,70 @@ describe("session integration", function()
     session.stop()
   end)
 
+  it("rebuilds mirror batches for explicit chapter navigation", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = {
+            { title = "One", lines = { "one" } },
+            { title = "Two", lines = { "two-a", "two-b", "two-c" } },
+          },
+          toc = {
+            { title = "One", index = 1 },
+            { title = "Two", index = 2 },
+          },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      buffer = {
+        layout = {
+          region_lines = 4,
+          max_blocks_per_region = 1,
+          max_lines_per_block = 1,
+          min_gap_lines = 1,
+          max_total_blocks = 3,
+          edge_padding = 0,
+        },
+      },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({
+      "local a = 1", "local b = 2", "local c = 3", "local d = 4",
+      "local e = 5", "local f = 6", "local g = 7", "local h = 8",
+      "local i = 9", "local j = 10", "local k = 11", "local l = 12",
+    }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    local current = session.get()
+    local mirror_state = current.ctx.view_state.mirror
+    local rows = vim.deepcopy(mirror_state.reader_rows)
+    local initial_batch = mirror_state.rendered_by_key
+    assert.is_truthy(initial_batch["2:1:1"])
+
+    assert.is_true(session.dispatch("next_content"))
+    assert.equal(2, current.position.chapter_index)
+    assert.equal(initial_batch, mirror_state.rendered_by_key)
+
+    assert.is_true(session.dispatch("prev_chapter"))
+    assert.equal(1, current.position.chapter_index)
+    assert.is_not.equal(initial_batch, mirror_state.rendered_by_key)
+    assert.same(rows, mirror_state.reader_rows)
+
+    local previous_batch = mirror_state.rendered_by_key
+    assert.is_true(session.dispatch("next_chapter"))
+    assert.equal(2, current.position.chapter_index)
+    assert.is_not.equal(previous_batch, mirror_state.rendered_by_key)
+    assert.is_nil(mirror_state.rendered_by_key["1:1:1"])
+    assert.is_truthy(mirror_state.rendered_by_key["2:1:1"])
+    assert.same(rows, mirror_state.reader_rows)
+    session.stop()
+  end)
+
   it("restores each code view after hiding and migrating the mirror", function()
     package.loaded["ghost-reader.bookshelf"] = {
       open = function(path)

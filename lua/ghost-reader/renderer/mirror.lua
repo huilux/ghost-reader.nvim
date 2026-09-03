@@ -340,6 +340,14 @@ function M.invalidate_layout(ctx)
   mirror.fold_snapshot = nil
 end
 
+function M.invalidate_content(ctx)
+  local mirror = state(ctx)
+  mirror.prepared_by_row = nil
+  mirror.rendered_by_key = nil
+  mirror.reader_rows = nil
+  mirror.active_row = nil
+end
+
 function M.stop(ctx)
   local mirror = state(ctx)
   mirror.visible = false

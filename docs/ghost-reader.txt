@@ -131,7 +131,8 @@ size, and window layout without covering native status information.
 
   - `j` and `k` move by line or segment.
   - `a` toggles autoplay.
-  - `+` and `-` adjust autoplay speed.
+  - `▶` indicates autoplay and `‖` indicates manual reading.
+  - `+` and `-` adjust autoplay speed and report the active interval.
   - Long text is wrapped by display width.
 
 ==============================================================================

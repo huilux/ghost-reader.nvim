@@ -58,13 +58,17 @@ end
 
 describe("renderer.statusline", function()
   local original_new_timer
+  local original_notify
 
   before_each(function()
     original_new_timer = vim.uv.new_timer
+    original_notify = vim.notify
+    vim.notify = function() end
   end)
 
   after_each(function()
     vim.uv.new_timer = original_new_timer
+    vim.notify = original_notify
     package.loaded["ghost-reader.actions"] = nil
     package.loaded["ghost-reader.renderer.statusline"] = nil
   end)
@@ -89,6 +93,39 @@ describe("renderer.statusline", function()
     assert.is_nil(ctx.view_state.statusline.win)
     assert.is_nil(ctx.view_state.statusline.buf)
     assert.is_nil(ctx.view_state.statusline.timer)
+  end)
+
+  it("renders the active block from a backward frame", function()
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    vim.uv.new_timer = function()
+      return timer
+    end
+
+    assert.is_true(renderer.render(ctx, {
+      blocks = {
+        { text = "earlier", active = false },
+        { text = "previous", active = true },
+      },
+    }))
+
+    assert.same({ "▶ previous" }, vim.api.nvim_buf_get_lines(ctx.view_state.statusline.buf, 0, -1, false))
+  end)
+
+  it("updates the leading icon when autoplay is toggled", function()
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    vim.uv.new_timer = function()
+      return timer
+    end
+
+    assert.is_true(renderer.render(ctx, { blocks = { { text = "hello", active = true } } }))
+    assert.same({ "▶ hello" }, vim.api.nvim_buf_get_lines(ctx.view_state.statusline.buf, 0, -1, false))
+
+    assert.is_false(renderer.toggle_auto(ctx))
+    assert.same({ "‖ hello" }, vim.api.nvim_buf_get_lines(ctx.view_state.statusline.buf, 0, -1, false))
   end)
 
   it("resizes the float and wraps by columns", function()
@@ -181,6 +218,34 @@ describe("renderer.statusline", function()
     assert.is_equal(15000, renderer.slower(ctx))
     assert.is_false(renderer.toggle_auto(ctx))
     assert.is_true(renderer.toggle_auto(ctx))
+  end)
+
+  it("reports the current autoplay interval after speed changes", function()
+    local renderer = fresh_renderer()
+    local ctx = make_context()
+    local timer = make_timer_stub()
+    local notifications = {}
+    local original_notify = vim.notify
+    vim.uv.new_timer = function()
+      return timer
+    end
+    vim.notify = function(message)
+      notifications[#notifications + 1] = message
+    end
+
+    local ok, err = pcall(function()
+      ctx.config.statusline.interval = 3000
+      assert.is_true(renderer.start(ctx))
+      assert.equal(2500, renderer.faster(ctx))
+      assert.equal(3000, renderer.slower(ctx))
+    end)
+
+    vim.notify = original_notify
+    if not ok then error(err) end
+    assert.same({
+      "[ghost-reader] Autoplay interval: 2.5s",
+      "[ghost-reader] Autoplay interval: 3.0s",
+    }, notifications)
   end)
 
   it("re-arms autoplay using the stored interval and ignores replacement sessions", function()

@@ -21,6 +21,10 @@ local function clamp_interval(value)
   return value
 end
 
+local function notify_interval(interval)
+  utils.notify(string.format("Autoplay interval: %.1fs", interval / 1000))
+end
+
 local function config(ctx)
   return (ctx and ctx.config and ctx.config.statusline) or {}
 end
@@ -72,11 +76,17 @@ local function timer_factory()
   return assert(vim.uv.new_timer())
 end
 
-local function render_text(frame)
+local function render_text(ctx, frame)
   local blocks = frame and frame.blocks or {}
   local block = blocks[1] or {}
+  for _, candidate in ipairs(blocks) do
+    if candidate.active then
+      block = candidate
+      break
+    end
+  end
   local text = block.text or ""
-  local prefix = block.active and "▶ " or "‖ "
+  local prefix = autoplay_enabled(ctx) and "▶ " or "‖ "
   return prefix .. text
 end
 
@@ -219,7 +229,7 @@ function M.render(ctx, frame)
   st.generation = current_generation(ctx)
   local win = open_float(ctx)
   update_window(st)
-  vim.api.nvim_buf_set_lines(st.buf, 0, -1, false, { render_text(st.frame) })
+  vim.api.nvim_buf_set_lines(st.buf, 0, -1, false, { render_text(ctx, st.frame) })
   schedule_autoplay(ctx)
   return true
 end
@@ -253,7 +263,7 @@ function M.restore(ctx, frame)
     return false
   end
   update_window(st)
-  vim.api.nvim_buf_set_lines(st.buf, 0, -1, false, { render_text(current_frame(st)) })
+  vim.api.nvim_buf_set_lines(st.buf, 0, -1, false, { render_text(ctx, current_frame(st)) })
   schedule_autoplay(ctx)
   return true
 end
@@ -286,6 +296,9 @@ function M.toggle_auto(ctx)
   else
     close_timer(st)
   end
+  if st.buf and vim.api.nvim_buf_is_valid(st.buf) then
+    vim.api.nvim_buf_set_lines(st.buf, 0, -1, false, { render_text(ctx, current_frame(st)) })
+  end
   return st.autoplay
 end
 
@@ -295,6 +308,7 @@ function M.faster(ctx)
   if st.visible and autoplay_enabled(ctx) then
     schedule_autoplay(ctx)
   end
+  notify_interval(st.interval)
   return st.interval
 end
 
@@ -304,6 +318,7 @@ function M.slower(ctx)
   if st.visible and autoplay_enabled(ctx) then
     schedule_autoplay(ctx)
   end
+  notify_interval(st.interval)
   return st.interval
 end
 

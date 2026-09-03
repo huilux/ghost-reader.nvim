@@ -26,4 +26,15 @@ describe("parser_epub", function()
     assert.equal("Para one.", lines[1])
     assert.equal("Para two.", lines[2])
   end)
+
+  it("extracts body text without head metadata", function()
+    local html = [[
+      <html>
+        <head><title>Repeated metadata</title></head>
+        <body><p>Chapter title</p><p>Chapter content.</p></body>
+      </html>
+    ]]
+
+    assert.same({ "Chapter title", "Chapter content." }, parser._html_to_lines(html))
+  end)
 end)

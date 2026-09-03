@@ -58,7 +58,8 @@ end
 
 -- 将 HTML 转为行数组
 function M._html_to_lines(html)
-  local stripped = M._strip_html(html)
+  local body = html and html:match("<[Bb][Oo][Dd][Yy][^>]*>(.-)</[Bb][Oo][Dd][Yy]%s*>")
+  local stripped = M._strip_html(body or html)
   local lines = {}
   -- [Lua概念] str:gmatch(pattern) 返回一个迭代器，每次产生一个匹配。
   -- "[^\n]+" 匹配"不是换行符的连续字符"，即按换行分割。

@@ -193,7 +193,7 @@ local function prepare_rows(ctx, blocks, slots)
 end
 
 local function request_redraw()
-  vim.cmd("redraw")
+  vim.cmd("redraw!")
 end
 
 local function capture_view(ctx, mirror)

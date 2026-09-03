@@ -9,6 +9,16 @@ local function assert_no_persistent_marks(buf, namespace)
   assert.equal(0, #vim.api.nvim_buf_get_extmarks(buf, namespace, 0, -1, {}))
 end
 
+local function screen_text_for_buffer_row(win, row)
+  local position = vim.fn.screenpos(win, row, 1)
+  assert.is_true(position.row > 0)
+  local chars = {}
+  for col = 1, vim.o.columns do
+    chars[#chars + 1] = vim.fn.screenstring(position.row, col)
+  end
+  return table.concat(chars)
+end
+
 describe("session integration", function()
   before_each(function()
     helpers.reset_modules()
@@ -189,6 +199,62 @@ describe("session integration", function()
     assert.is_nil(mirror_state.rendered_by_key["1:1:1"])
     assert.is_truthy(mirror_state.rendered_by_key["2:1:1"])
     assert.same(rows, mirror_state.reader_rows)
+    session.stop()
+  end)
+
+  it("redraws every visible mirror block immediately after chapter navigation", function()
+    package.loaded["ghost-reader.bookshelf"] = {
+      open = function(path)
+        return {
+          path = path,
+          format = "txt",
+          chapters = {
+            { title = "One", lines = { "old-a", "old-b", "old-c" } },
+            { title = "Two", lines = { "fresh-a", "fresh-b", "fresh-c" } },
+          },
+          toc = {
+            { title = "One", index = 1 },
+            { title = "Two", index = 2 },
+          },
+        }
+      end,
+    }
+    local session = require("ghost-reader.session")
+    local root = vim.fn.tempname()
+    session.configure(require("ghost-reader.config").setup({
+      buffer = {
+        layout = {
+          region_lines = 4,
+          max_blocks_per_region = 1,
+          max_lines_per_block = 1,
+          min_gap_lines = 1,
+          max_total_blocks = 3,
+          edge_padding = 0,
+        },
+      },
+      paths = { cache_dir = root .. "-cache/", data_dir = root .. "-data/" },
+    }))
+    helpers.new_normal_buffer({
+      "local a = 1", "local b = 2", "local c = 3", "local d = 4",
+      "local e = 5", "local f = 6", "local g = 7", "local h = 8",
+      "local i = 9", "local j = 10", "local k = 11", "local l = 12",
+    }, "lua")
+
+    assert.is_true(session.start(vim.fn.tempname() .. ".txt", "mirror"))
+    vim.cmd("redraw!")
+    local current = session.get()
+    local rows = vim.deepcopy(current.ctx.view_state.mirror.reader_rows)
+    assert.equal(3, #rows)
+    for index, expected in ipairs({ "old-a", "old-b", "old-c" }) do
+      assert.is_truthy(screen_text_for_buffer_row(current.target_win, rows[index]):find(expected, 1, true))
+    end
+
+    assert.is_true(session.dispatch("next_chapter"))
+    assert.equal(2, current.position.chapter_index)
+    assert.same(rows, current.ctx.view_state.mirror.reader_rows)
+    for index, expected in ipairs({ "fresh-a", "fresh-b", "fresh-c" }) do
+      assert.is_truthy(screen_text_for_buffer_row(current.target_win, rows[index]):find(expected, 1, true))
+    end
     session.stop()
   end)
 
